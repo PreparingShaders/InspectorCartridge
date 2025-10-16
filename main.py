@@ -1,3 +1,10 @@
+#Этот блок только для рабочего ноута,
+# отключаем ssl проверку импортируем функцию из файлика ssl_off
+import  ssl
+from ssl_off import unsafe_create_default_context
+ssl.create_default_context = unsafe_create_default_context
+#--------------
+
 import asyncio
 from telebot.async_telebot import AsyncTeleBot
 from telebot.types import Message
@@ -16,12 +23,17 @@ async def start(message: Message):
     role = AUTHORIZED_USERS.get(user_id)  # проверяем текущую авторизацию
 
     if role:
-        await bot.send_message(user_id, f"Вы уже авторизованы как {role}")
-        await bot.send_message(user_id, "Меню:", reply_markup=get_admin_menu() if role == "admin" else get_user_menu())
+        await send_welcome_with_menu(user_id, role)
         return
 
     await bot.send_message(user_id, "Привет! Введите пароль для авторизации:")
     USER_STATE[user_id] = "awaiting_password"
+
+async def send_welcome_with_menu(user_id: int, role: str):
+    menu = get_admin_menu() if role == "admin" else get_user_menu()
+    text = f"Вы успешно авторизованы как {role}! Выберите действие:"
+    await bot.send_message(user_id, text, reply_markup=menu)
+
 
 @bot.message_handler(func=lambda m: True)
 async def handle_messages(message: Message):
@@ -35,11 +47,7 @@ async def handle_messages(message: Message):
         if role:
             AUTHORIZED_USERS[user_id] = role
             USER_STATE[user_id] = None
-            await bot.send_message(user_id, f"Вы успешно авторизованы как {role}!")
-            await bot.send_message(user_id, "Меню:", reply_markup=get_admin_menu() if role == "admin" else get_user_menu())
-        else:
-            await bot.send_message(user_id, "Неверный пароль, попробуйте снова:")
-        return
+            await send_welcome_with_menu(user_id, role)
 
     # --- Кнопка выхода ---
     if message.text == "🚪 Выйти":
@@ -51,26 +59,20 @@ async def handle_messages(message: Message):
 
     # --- Логика пользователя ---
     if role == "user":
-        if message.text == "🛒 Посмотреть товары":
-            await bot.send_message(user_id, "Функция просмотра товаров пока не реализована")
-        elif message.text == "📦 Проверить наличие":
-            await bot.send_message(user_id, "Функция проверки наличия пока не реализована")
+        if message.text == "📤 Расход":
+            await bot.send_message(user_id, "Функция списания картриджей пока не реализована")
         elif message.text == "❓ Помощь":
             await bot.send_message(user_id, "Здесь будет справка по использованию бота")
-        else:
-            await bot.send_message(user_id, "Выберите действие с помощью кнопок меню")
         return
 
     # --- Логика админа ---
     if role == "admin":
-        if message.text == "📥 Принять на склад":
+        if message.text == "📥 Приход":
             await bot.send_message(user_id, "Функция принятия на склад пока не реализована")
-        elif message.text == "📊 Запросить остаток":
+        elif message.text == "📊 Складской запас":
             await bot.send_message(user_id, "Функция запроса остатка пока не реализована")
-        elif message.text == "📤 Списать со склада":
+        elif message.text == "📤 Расход":
             await bot.send_message(user_id, "Функция списания со склада пока не реализована")
-        else:
-            await bot.send_message(user_id, "Выберите действие с помощью кнопок меню")
         return
 
     # --- Если не авторизован ---
