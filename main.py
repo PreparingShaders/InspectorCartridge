@@ -10,7 +10,14 @@ from telebot.async_telebot import AsyncTeleBot
 from telebot.types import Message
 from auth.auth import check_password, get_role
 from ui.menu import get_admin_menu, get_user_menu
+from actions import handle_user_expense, handle_admin_income, handle_admin_stock
 import os
+
+from db import init_db, seed_data
+init_db()  # при запуске
+seed_data()
+
+USER_STATES = {}  # user_id: {'step': str, 'warehouse': str | None, 'model': str | None}
 
 bot = AsyncTeleBot(os.environ["TELEGRAM_TESTBOT"])
 
@@ -60,7 +67,7 @@ async def handle_messages(message: Message):
     # --- Логика пользователя ---
     if role == "user":
         if message.text == "📤 Расход":
-            await bot.send_message(user_id, "Функция списания картриджей пока не реализована")
+            await handle_user_expense(bot, user_id)
         elif message.text == "❓ Помощь":
             await bot.send_message(user_id, "Здесь будет справка по использованию бота")
         return
@@ -68,11 +75,11 @@ async def handle_messages(message: Message):
     # --- Логика админа ---
     if role == "admin":
         if message.text == "📥 Приход":
-            await bot.send_message(user_id, "Функция принятия на склад пока не реализована")
+            await handle_admin_income(bot, user_id)
         elif message.text == "📊 Складской запас":
-            await bot.send_message(user_id, "Функция запроса остатка пока не реализована")
+            await handle_admin_stock(bot, user_id)
         elif message.text == "📤 Расход":
-            await bot.send_message(user_id, "Функция списания со склада пока не реализована")
+            await handle_user_expense(bot, user_id)  # та же функция, что и для user
         return
 
     # --- Если не авторизован ---
