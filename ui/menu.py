@@ -1,5 +1,12 @@
 from telebot.types import ReplyKeyboardMarkup, KeyboardButton
 
+
+def get_warehouse_menu():
+    markup = ReplyKeyboardMarkup(resize_keyboard=True)
+    markup.row(KeyboardButton("🏬 Невская"), KeyboardButton("🏬 Новороссийская"))
+    return markup
+
+
 def get_admin_menu():
     keyboard = ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
     keyboard.add(
