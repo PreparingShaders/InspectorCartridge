@@ -1,15 +1,21 @@
+# Этот блок только для рабочего ноута
+import ssl
+from ssl_off import unsafe_create_default_context
+ssl.create_default_context = unsafe_create_default_context
+# -------------
+
+
 import asyncio
 from telebot.async_telebot import AsyncTeleBot
 from telebot.types import Message
 from auth.auth import check_password, get_role
-from ui.menu import get_admin_menu, get_user_menu, get_warehouse_menu, get_cartridge_type_keyboard
+from ui.menu import get_admin_menu, get_user_menu, get_warehouse_menu, get_cartridge_inline_keyboard
 from actions import handle_user_expense, handle_admin_income, handle_admin_stock
 import os
-from db import init_db, seed_data
+from db import init_db
 
 # Инициализация базы
 init_db()
-seed_data()
 
 # --- Состояния пользователей ---
 USER_STATES = {}  # user_id: {'step': str, 'warehouse': str | None, 'model': str | None}
@@ -63,27 +69,6 @@ async def handle_warehouse_selection(message: Message):
         f"Вы выбрали {message.text}. Выберите действие:",
         reply_markup=get_admin_menu() if role == "admin" else get_user_menu()
     )
-
-
-# === Хендлер для Приход/Расход ===
-@bot.message_handler(func=lambda m: m.text in ["📥 Приход", "📤 Расход"])
-async def handle_flow(msg):
-    user_id = msg.from_user.id
-    user_state = USER_STATES.get(user_id)
-
-    if not user_state or not user_state.get("model"):
-        await bot.send_message(msg.chat.id, "Сначала выберите склад!", reply_markup=get_warehouse_menu())
-        return
-
-    model = user_state["model"]
-    action = "income" if msg.text == "📥 Приход" else "outcome"
-    kb = get_cartridge_type_keyboard(action, model)
-    if not kb:
-        await bot.send_message(msg.chat.id, "Картриджи для этого склада не найдены.", reply_markup=get_admin_menu())
-        return
-
-    await bot.send_message(msg.chat.id, "Выберите тип картриджа:", reply_markup=kb)
-
 
 # === ОБЩИЙ ХЕНДЛЕР ВСЕХ ОСТАЛЬНЫХ СООБЩЕНИЙ ===
 @bot.message_handler(func=lambda m: True)

@@ -1,22 +1,14 @@
 # actions.py
 
 from telebot.async_telebot import AsyncTeleBot
-from db import add_transaction
-
+from db import get_all_cartridge_types
+from ui.menu import get_cartridge_inline_keyboard
 # Эти функции пока используют только user_id и bot, потом можно будет расширить
 
 async def handle_admin_income(bot: AsyncTeleBot, user_id: int):
     try:
-        add_transaction(
-            barcode="TEST98765",
-            warehouse_name="Невская",
-            model="CF226X",
-            quantity='4',
-            operation_type="приход",
-            user=f"admin_{user_id}",
-            comment="Приход через бота"
-        )
-        await bot.send_message(user_id, "Приход записан (тестовая запись).")
+        keyboard = get_cartridge_inline_keyboard()
+        await bot.send_message(user_id, f"Выберите модель картриджа: ", reply_markup=keyboard)
     except Exception as e:
         await bot.send_message(user_id, f"Ошибка при приходе: {e}")
 
@@ -38,5 +30,5 @@ async def handle_user_expense(bot: AsyncTeleBot, user_id: int):
         )
         await bot.send_message(user_id, "Картридж списан (тестовая запись).")
     except Exception as e:
-        await bot.send_message(user_id, f"Ошибка при списании: {e}")
+        await bot.send_message(user_id, f"Ошибка при списании: {e}, {get_all_cartridge_types()}")
 

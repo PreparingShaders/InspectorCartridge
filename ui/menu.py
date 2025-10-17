@@ -1,13 +1,11 @@
 from telebot.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardButton, InlineKeyboardMarkup
-from db import get_cartridge_types_for_model  # если она у тебя в db.py
-
+from db import get_all_cartridge_types  # импорт из твоего db.py
 
 def get_warehouse_menu():
     markup = ReplyKeyboardMarkup(resize_keyboard=True)
-    markup.row(KeyboardButton("🏬 Невская"), KeyboardButton("🏬 Новороссийская")),
-    markup.row( KeyboardButton("❓ Помощь"), KeyboardButton("🚪 Выйти"),)
+    markup.row(KeyboardButton("🏬 Невская"), KeyboardButton("🏬 Новороссийская"))
+    markup.row(KeyboardButton("❓ Помощь"), KeyboardButton("🚪 Выйти"))
     return markup
-
 
 def get_admin_menu():
     keyboard = ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
@@ -27,13 +25,16 @@ def get_user_menu():
     )
     return keyboard
 
-def get_cartridge_type_keyboard(action: str, model: str):
-    types = get_cartridge_types_for_model(model)  # [(id, name), ...]
-    if not types:
-        return None
+def get_cartridge_inline_keyboard():
+    """
+    Возвращает инлайн-клавиатуру с типами картриджей из базы.
+    Используется для выбора модели в приходе/расходе.
+    """
+    types = get_all_cartridge_types()
+    markup = InlineKeyboardMarkup(row_width=3)
 
-    markup = InlineKeyboardMarkup()
-    for type_id, name in types:
-        markup.add(InlineKeyboardButton(text=name, callback_data=f"{action}:{type_id}"))
-    markup.add(InlineKeyboardButton("🔙 Отмена", callback_data="cancel"))
+    for model in types:
+        btn = InlineKeyboardButton(text=model, callback_data=f"cartridge:{model}")
+        markup.add(btn)
+
     return markup
