@@ -67,17 +67,21 @@ def get_warehouse_id(name: str):
         return result[0] if result else None
 
 # --- Получение ID картриджа по модели ---
-def get_cartridge_type_id(model: str):
+def get_cartridge_types_for_model(model: str):
+    """
+    Возвращает список всех картриджей для склада (model)
+    в формате [(id, name), ...]
+    """
     with sqlite3.connect(DB_NAME) as conn:
         cursor = conn.cursor()
-        cursor.execute('SELECT id FROM cartridge_types WHERE model = ?', (model,))
-        result = cursor.fetchone()
-        return result[0] if result else None
+        cursor.execute('SELECT id, model FROM cartridge_types WHERE model = ?', (model,))
+        return cursor.fetchall()  # возвращаем список всех картриджей
+
 
 # --- Добавление операции (приход/расход) ---
 def add_transaction(barcode: str, warehouse_name: str, model: str, quantity: int, operation_type: str, user: str, comment: str):
     warehouse_id = get_warehouse_id(warehouse_name)
-    cartridge_type_id = get_cartridge_type_id(model)
+    cartridge_type_id = get_cartridge_types_for_model(model)
 
     if warehouse_id is None:
         raise ValueError(f"Склад '{warehouse_name}' не найден в базе данных.")
