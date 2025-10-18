@@ -1,8 +1,8 @@
 # Этот блок только для рабочего ноута
-import ssl
-from ssl_off import unsafe_create_default_context
-ssl.create_default_context = unsafe_create_default_context
-# -------------
+# import ssl
+# from ssl_off import unsafe_create_default_context
+# ssl.create_default_context = unsafe_create_default_context
+# # -------------
 
 
 import asyncio
@@ -13,6 +13,7 @@ from ui.menu import get_admin_menu, get_user_menu, get_warehouse_menu, get_cartr
 from actions import handle_user_expense, handle_admin_income, handle_admin_stock
 import os
 from db import init_db
+from telebot.types import CallbackQuery
 
 # Инициализация базы
 init_db()
@@ -137,6 +138,22 @@ async def handle_messages(message: Message):
 
     # --- Неавторизован ---
     await bot.send_message(user_id, "Сначала введите пароль через /start")
+
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith("cartridge:"))
+async def handle_cartridge_callback(call: CallbackQuery):
+    user_id = call.from_user.id
+    model = call.data.split(":", 1)[1]
+
+    # сохраняем выбор модели
+    USER_STATES[user_id] = {
+        "step": "awaiting_barcode",
+        "model": model,
+        "warehouse": USER_STATES.get(user_id, {}).get("warehouse")
+    }
+    print(USER_STATES)
+    await bot.answer_callback_query(call.id)
+    await bot.send_message(call.message.chat.id, f"Введите или приложите фотографию штрих-код для модели {model}:")
 
 
 # === Точка входа ===

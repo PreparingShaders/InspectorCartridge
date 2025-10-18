@@ -60,6 +60,7 @@ def init_db():
         conn.commit()
         print("База инициализирована и заполнена начальными данными.")
 
+
 def get_all_cartridge_types():
     with sqlite3.connect(DB_NAME) as conn:
         cursor = conn.cursor()

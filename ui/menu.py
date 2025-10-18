@@ -3,7 +3,7 @@ from db import get_all_cartridge_types  # импорт из твоего db.py
 
 def get_warehouse_menu():
     markup = ReplyKeyboardMarkup(resize_keyboard=True)
-    markup.row(KeyboardButton("🏬 Невская"), KeyboardButton("🏬 Новороссийская"))
+    markup.row(KeyboardButton( "🏬 Невская"), KeyboardButton("🏬 Новороссийская"))
     markup.row(KeyboardButton("❓ Помощь"), KeyboardButton("🚪 Выйти"))
     return markup
 
