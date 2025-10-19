@@ -25,6 +25,22 @@ def get_user_menu():
     )
     return keyboard
 
+def get_barcode_menu():
+    """
+    Возвращает клавиатуру с кнопкой 'Пропустить' для ввода штрих-кода.
+    """
+    markup = ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
+    markup.add(KeyboardButton("Нет кода"),
+               KeyboardButton("🚪 Выйти"))
+    return markup
+
+def get_confirm_menu():
+    markup = ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
+    markup.add(KeyboardButton("Верно"), KeyboardButton("Я ошибся"))
+    markup.row(KeyboardButton("🚪 Выйти"))
+    return markup
+
+
 def get_cartridge_inline_keyboard():
     """
     Возвращает инлайн-клавиатуру с типами картриджей из базы.
