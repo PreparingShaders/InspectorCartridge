@@ -1,3 +1,11 @@
+#
+# Этот блок только для рабочего ноута
+import ssl
+from ssl_off import unsafe_create_default_context
+ssl.create_default_context = unsafe_create_default_context
+# -------------
+
+
 import asyncio
 from db import save_transaction
 from telebot.async_telebot import AsyncTeleBot
@@ -31,7 +39,8 @@ def reset_state(user_id):
         "warehouse": None,
         "operation": None,
         "model": None,
-        "barcode": None
+        "barcode": None,
+        "comment": None,
     }
 def reset_state_for_next_transaction(user_id):
     state = get_state(user_id)
@@ -39,6 +48,7 @@ def reset_state_for_next_transaction(user_id):
     state["operation"] = None
     state["model"] = None
     state["barcode"] = None
+    state["comment"] = None
 
 # --- Проверка и создание состояния ---
 def get_state(user_id):
@@ -118,10 +128,19 @@ async def main_handler(message: Message):
         barcode = text if text.lower() not in ["нет кода", "пропустить"] else "отсутствует"
         state["barcode"] = barcode
         state["step"] = "confirm_barcode"
+        state["step"] = "awaiting_comment"  # Новый шаг
+        await bot.send_message(user_id, "Введите комментарий (например, имя пользователя, отдел, причина и т.п.):")
+        return
+
+    if state["step"] == "awaiting_comment":
+        state["comment"] = text
+        state["step"] = "confirm_barcode"
         await bot.send_message(
             user_id,
-            f"Мы {'принимаем' if state['operation']=='приход' else 'списываем'} картридж {state['model']} "
-            f" на склад {state['warehouse']} с серийным номером {barcode}, верно?",
+            f"Мы {'принимаем' if state['operation'] == 'приход' else 'списываем'} картридж {state['model']} "
+            f"на склад {state['warehouse']} с серийным номером {state['barcode']}.\n"
+            f"Комментарий: {state['comment']}\n"
+            f"Верно?",
             reply_markup=get_confirm_menu()
         )
         return
@@ -162,9 +181,6 @@ async def handle_model_callback(call: CallbackQuery):
     await bot.answer_callback_query(call.id)
     await bot.send_message(user_id, f"Введите штрих-код для модели {model}.\nЕсли кода нет, нажмите кнопку 'Нет кода':",
                                    reply_markup=get_barcode_menu())
-
-
-
 
 
 # --- Функция для показа меню действий ---

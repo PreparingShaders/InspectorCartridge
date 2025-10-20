@@ -62,12 +62,31 @@ def init_db():
         print("База инициализирована и заполнена начальными данными.")
 
 
+
 def get_all_cartridge_types():
     with sqlite3.connect(DB_NAME) as conn:
         cursor = conn.cursor()
         cursor.execute("SELECT model FROM cartridge_types ORDER BY model")
         results = cursor.fetchall()
         return [row[0] for row in results]
+
+def get_stock_grouped_by_warehouse():
+    with sqlite3.connect(DB_NAME) as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT 
+                w.name AS warehouse,
+                ct.model AS model,
+                SUM(t.quantity) AS stock
+            FROM transactions t
+            JOIN warehouses w ON t.warehouse_id = w.id
+            JOIN cartridge_types ct ON t.cartridge_type_id = ct.id
+            GROUP BY w.name, ct.model
+            ORDER BY w.name, ct.model;
+        """)
+        return cursor.fetchall()
+
+
 def save_transaction(user_state: dict, username: str):
     """Добавляет операцию (приход или расход) в базу данных."""
     with sqlite3.connect(DB_NAME) as conn:
@@ -79,6 +98,7 @@ def save_transaction(user_state: dict, username: str):
         model_name = user_state.get("model")
         barcode = user_state.get("barcode")
         operation = user_state.get("operation")
+        comment = user_state.get("comment")
         quantity = -1 if operation == "расход" else 1  # приход = +1, расход = -1
 
         # Находим warehouse_id
@@ -115,7 +135,7 @@ def save_transaction(user_state: dict, username: str):
                 quantity,
                 operation,
                 username,
-                None
+                comment,
             ),
         )
 
