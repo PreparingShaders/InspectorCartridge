@@ -1,7 +1,8 @@
 import asyncio
+from db import save_transaction
 from telebot.async_telebot import AsyncTeleBot
 from telebot.types import Message, CallbackQuery
-from auth.auth import check_password, get_role
+from auth.auth import check_password
 from ui.menu import (
     get_admin_menu,
     get_user_menu,
@@ -10,7 +11,6 @@ from ui.menu import (
     get_barcode_menu,
     get_confirm_menu
 )
-
 from actions import handle_user_expense, handle_admin_income, handle_admin_stock
 import os
 from db import init_db
@@ -18,189 +18,167 @@ from db import init_db
 # Инициализация базы
 init_db()
 
-# --- Состояния пользователей ---
-USER_STATES = {}  # user_id: {'step': str, 'warehouse': str | None, 'model': str | None, 'barcode': str | None}
-AUTHORIZED_USERS = {}  # user_id: role
-
 bot = AsyncTeleBot(os.environ["TELEGRAM_TESTBOT"])
 
+# --- Глобальные состояния ---
+USER_STATES = {}  # user_id -> словарь состояния
 
-# === Стартовая команда / авторизация ===
+# --- Утилита для сброса состояния ---
+def reset_state(user_id):
+    USER_STATES[user_id] = {
+        "step": None,
+        "role": None,
+        "warehouse": None,
+        "operation": None,
+        "model": None,
+        "barcode": None
+    }
+def reset_state_for_next_transaction(user_id):
+    state = get_state(user_id)
+    state["step"] = "awaiting_action"  # возвращаемся к выбору действия
+    state["operation"] = None
+    state["model"] = None
+    state["barcode"] = None
+
+# --- Проверка и создание состояния ---
+def get_state(user_id):
+    if user_id not in USER_STATES:
+        reset_state(user_id)
+    return USER_STATES[user_id]
+
+# --- Старт и авторизация ---
 @bot.message_handler(commands=["start"])
 async def start(message: Message):
     user_id = message.from_user.id
-    role = AUTHORIZED_USERS.get(user_id)
+    state = get_state(user_id)
 
-    if role:
-        await send_welcome_with_menu(user_id, role)
+    if state.get("role"):
+        await bot.send_message(user_id, "Вы уже авторизованы.")
+        await send_action_menu(user_id)
         return
 
+    state["step"] = "awaiting_password"
     await bot.send_message(user_id, "Привет! Введите пароль для авторизации:")
-    USER_STATES[user_id] = {'step': 'awaiting_password', 'warehouse': None, 'model': None, 'barcode': None}
 
 
-# === Показываем меню выбора склада ===
-async def send_welcome_with_menu(user_id: int, role: str):
-    USER_STATES[user_id] = {'step': 'awaiting_warehouse', 'warehouse': None, 'model': None, 'barcode': None}
-    text = f"Вы успешно авторизованы как {role}! Выберите склад:"
-    await bot.send_message(user_id, text, reply_markup=get_warehouse_menu())
-
-
-# === Обработка выбора склада ===
-@bot.message_handler(func=lambda message: message.text in ["🏬 Невская", "🏬 Новороссийская"])
-async def handle_warehouse_selection(message: Message):
-    user_id = message.from_user.id
-    state = USER_STATES.get(user_id)
-
-    if not state or state.get('step') != 'awaiting_warehouse':
-        return
-
-    USER_STATES[user_id]['warehouse'] = message.text
-    USER_STATES[user_id]['step'] = None
-
-    role = AUTHORIZED_USERS.get(user_id)
-    if not role:
-        await bot.send_message(user_id, "Ошибка: вы не авторизованы.")
-        return
-
-    await bot.send_message(
-        user_id,
-        f"Вы выбрали {message.text}. Выберите действие:",
-        reply_markup=get_admin_menu() if role == "admin" else get_user_menu()
-    )
-
-
-# === Callback для выбора картриджа ===
-@bot.callback_query_handler(func=lambda call: call.data.startswith("cartridge:"))
-async def handle_cartridge_callback(call: CallbackQuery):
-    user_id = call.from_user.id
-    model = call.data.split(":", 1)[1]
-
-    # сохраняем выбор модели
-    USER_STATES[user_id] = {
-        "step": "awaiting_barcode",
-        "model": model,
-        "warehouse": USER_STATES.get(user_id, {}).get("warehouse"),
-        "barcode": None
-    }
-
-    await bot.answer_callback_query(call.id)
-    await bot.send_message(
-        user_id,
-        f"Введите штрих-код для модели {model}.\nЕсли кода нет, нажмите кнопку 'Нет кода':",
-        reply_markup=get_barcode_menu()
-    )
-
-
-# === Хендлер для ввода штрих-кода ===
-@bot.message_handler(func=lambda message: USER_STATES.get(message.from_user.id, {}).get('step') == 'awaiting_barcode')
-async def handle_barcode_input(message: Message):
-    user_id = message.from_user.id
-    state = USER_STATES.get(user_id)
-    if not state:
-        return
-
-    role = AUTHORIZED_USERS.get(user_id)
-    text = message.text.strip().lower()
-
-    if text == "нет кода" or text == "пропустить":
-        barcode = "отсутствует"
-    else:
-        barcode = message.text.strip()
-
-    USER_STATES[user_id]['barcode'] = barcode
-    USER_STATES[user_id]['step'] = 'confirm_barcode'
-
-    # Просим подтвердить
-    await bot.send_message(
-        user_id,
-        f"Мы списываем картридж {state['model']} со склада {state['warehouse']} с серийным номером {barcode}, верно?",
-        reply_markup=get_confirm_menu()
-    )
-
-
-# === Общий хендлер всех остальных сообщений ===
 @bot.message_handler(func=lambda m: True)
-async def handle_messages(message: Message):
+async def main_handler(message: Message):
     user_id = message.from_user.id
-    state = USER_STATES.get(user_id, {})
-    role = AUTHORIZED_USERS.get(user_id)
+    state = get_state(user_id)
+    text = message.text.strip()
 
-    # --- Ждём пароль ---
-    if state.get('step') == "awaiting_password":
-        password = message.text.strip()
-        role = check_password(user_id, password)
+    # --- Выйти ---
+    if text == "🚪 Выйти":
+        reset_state(user_id)
+        await bot.send_message(user_id, "Вы вышли из аккаунта. Используйте /start для новой авторизации.")
+        return
+
+    # --- Шаги ---
+    if state["step"] == "awaiting_password":
+        role = check_password(user_id, text)
         if role:
-            AUTHORIZED_USERS[user_id] = role
-            await send_welcome_with_menu(user_id, role)
+            state["role"] = role
+            state["step"] = "awaiting_warehouse"
+            await bot.send_message(user_id, f"Вы авторизованы как {role}. Выберите склад:", reply_markup=get_warehouse_menu())
         else:
             await bot.send_message(user_id, "Неверный пароль. Попробуйте снова.")
         return
 
-    # --- Выйти ---
-    if message.text == "🚪 Выйти":
-        AUTHORIZED_USERS.pop(user_id, None)
-        USER_STATES.pop(user_id, None)
-        await bot.send_message(user_id, "Вы вышли из аккаунта. Используйте /start для новой авторизации.")
+    if state["step"] == "awaiting_warehouse":
+        warehouses_map = {
+            "🏬 Невская": "Невская",
+            "🏬 Новороссийская": "Новороссийская"
+        }
+
+        if text in warehouses_map:
+            state["warehouse"] = warehouses_map[text]  # сохраняем без эмодзи
+            state["step"] = "awaiting_action"
+            await send_action_menu(user_id)
+        else:
+            await bot.send_message(user_id, "Выберите склад через кнопки.")
         return
 
-    # --- Подтверждение списания ---
-    if state.get('step') == 'confirm_barcode':
-        if message.text == "Верно":
-            # Здесь вызываем функцию списания
-            await handle_user_expense(bot, user_id, state['model'], state['barcode'], state['warehouse'])
-            await bot.send_message(user_id, "Картридж списан!", reply_markup=get_admin_menu() if role == "admin" else get_user_menu())
-        elif message.text == "Я ошибся":
-            await bot.send_message(user_id, "Операция отменена. Введите штрих-код заново или выберите картридж.", reply_markup=None)
-        USER_STATES[user_id]['step'] = None
-        USER_STATES[user_id]['barcode'] = None
-        return
-
-    # --- Логика админа ---
-    if role == "admin":
-        if message.text == "📥 Приход":
-            await handle_admin_income(bot, user_id)
-        elif message.text == "📊 Складской запас":
+    if state["step"] == "awaiting_action":
+        if text == "📥 Приход" and state["role"] == "admin":
+            state["operation"] = "приход"
+            await bot.send_message(user_id, "Выберите модель картриджа:", reply_markup=get_cartridge_inline_keyboard())
+            state["step"] = "awaiting_model"
+        elif text == "📤 Расход":
+            state["operation"] = "расход"
+            await bot.send_message(user_id, "Выберите модель картриджа:", reply_markup=get_cartridge_inline_keyboard())
+            state["step"] = "awaiting_model"
+        elif text == "📊 Складской запас" and state["role"] == "admin":
             await handle_admin_stock(bot, user_id)
-        elif message.text == "📤 Расход":
-            await handle_user_expense(bot, user_id)
-        elif message.text == "❓ Помощь":
-            await bot.send_message(user_id, """
-🧾 Справка по использованию бота
-Бот предназначен для учёта картриджей на складе.
-Он позволяет:
-📦 Принимать и выдавать картриджи;
-📊 Вести учёт текущего потребления и остатка на складе;
-🔢 Сканировать или вводить штрих-коды (баркоды);
-💾 Сохранять данные о картриджах в базе.
-            """)
+        else:
+            await bot.send_message(user_id, "Выберите действие через кнопки.")
         return
 
-    # --- Логика пользователя ---
-    if role == "user":
-        if message.text == "📤 Расход":
-            await handle_user_expense(bot, user_id)
-        elif message.text == "❓ Помощь":
-            await bot.send_message(user_id, """
-🧾 Справка по использованию бота
-Бот предназначен для учёта картриджей на складе.
-Он позволяет:
-📦 Принимать и выдавать картриджи;
-📊 Вести учёт текущего потребления и остатка на складе;
-🔢 Сканировать или вводить штрих-коды (баркоды);
-💾 Сохранять данные о картриджах в базе.
-            """)
+    if state["step"] == "awaiting_barcode":
+        # Ввод штрих-кода
+        barcode = text if text.lower() not in ["нет кода", "пропустить"] else "отсутствует"
+        state["barcode"] = barcode
+        state["step"] = "confirm_barcode"
+        await bot.send_message(
+            user_id,
+            f"Мы {'принимаем' if state['operation']=='приход' else 'списываем'} картридж {state['model']} "
+            f" на склад {state['warehouse']} с серийным номером {barcode}, верно?",
+            reply_markup=get_confirm_menu()
+        )
         return
 
-    # --- Неавторизован ---
-    await bot.send_message(user_id, "Сначала введите пароль через /start")
+    if state["step"] == "confirm_barcode":
+        if text == "Верно":
+            username = message.from_user.username or message.from_user.first_name
+            try:
+                save_transaction(state, username)
+                await bot.send_message(user_id, "✅ Операция успешно сохранена в базе данных.")
+                reset_state_for_next_transaction(user_id)
+                await send_action_menu(user_id)
+            except Exception as e:
+                await bot.send_message(user_id, f"❌ Ошибка при сохранении: {e}")
+                reset_state_for_next_transaction(user_id)
+                await send_action_menu(user_id)
+
+        elif text == "Я ошибся":
+            state["step"] = "awaiting_barcode"
+            state["barcode"] = None
+            await bot.send_message(
+                user_id,
+                "Введите штрих-код заново или выберите картридж:",
+                reply_markup=get_barcode_menu()
+            )
+        return
+
+# --- Inline callback для выбора модели ---
+@bot.callback_query_handler(func=lambda call: call.data.startswith("cartridge:"))
+async def handle_model_callback(call: CallbackQuery):
+    user_id = call.from_user.id
+    state = get_state(user_id)
+    model = call.data.split(":", 1)[1]
+
+    state["model"] = model
+    state["step"] = "awaiting_barcode"
+
+    await bot.answer_callback_query(call.id)
+    await bot.send_message(user_id, f"Введите штрих-код для модели {model}.\nЕсли кода нет, нажмите кнопку 'Нет кода':",
+                                   reply_markup=get_barcode_menu())
 
 
-# === Точка входа ===
+
+
+
+# --- Функция для показа меню действий ---
+async def send_action_menu(user_id):
+    state = get_state(user_id)
+    if state["role"] == "admin":
+        await bot.send_message(user_id, f"Выберите действие:", reply_markup=get_admin_menu())
+    else:
+        await bot.send_message(user_id, f"Выберите действие:", reply_markup=get_user_menu())
+
+# --- Точка входа ---
 async def main():
-    print('Бот запущен')
+    print("Бот запущен")
     await bot.polling()
-
 
 if __name__ == "__main__":
     asyncio.run(main())

@@ -1,4 +1,5 @@
 import sqlite3
+from datetime import datetime
 
 DB_NAME = "inventory.db"
 
@@ -67,3 +68,56 @@ def get_all_cartridge_types():
         cursor.execute("SELECT model FROM cartridge_types ORDER BY model")
         results = cursor.fetchall()
         return [row[0] for row in results]
+def save_transaction(user_state: dict, username: str):
+    """Добавляет операцию (приход или расход) в базу данных."""
+    with sqlite3.connect(DB_NAME) as conn:
+        cursor = conn.cursor()
+        cursor.execute("PRAGMA foreign_keys = ON;")
+
+        # Извлекаем значения из состояния
+        warehouse_name = user_state.get("warehouse")
+        model_name = user_state.get("model")
+        barcode = user_state.get("barcode")
+        operation = user_state.get("operation")
+        quantity = -1 if operation == "расход" else 1  # приход = +1, расход = -1
+
+        # Находим warehouse_id
+        cursor.execute("SELECT id FROM warehouses WHERE name = ?", (warehouse_name,))
+        warehouse_row = cursor.fetchone()
+        if not warehouse_row:
+            raise ValueError(f"Склад '{warehouse_name}' не найден.")
+        warehouse_id = warehouse_row[0]
+
+        # Находим cartridge_type_id
+        cursor.execute("SELECT id FROM cartridge_types WHERE model = ?", (model_name,))
+        cartridge_row = cursor.fetchone()
+        if not cartridge_row:
+            raise ValueError(f"Модель картриджа '{model_name}' не найдена.")
+        cartridge_type_id = cartridge_row[0]
+
+        # Формируем дату
+        date_now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+        # Добавляем запись
+        cursor.execute(
+            """
+            INSERT INTO transactions (
+                date, barcode, warehouse_id, cartridge_type_id, quantity, 
+                operation_type, user, comment
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                date_now,
+                barcode,
+                warehouse_id,
+                cartridge_type_id,
+                quantity,
+                operation,
+                username,
+                None
+            ),
+        )
+
+        conn.commit()
+        print(f"✅ {operation.title()} картриджа {model_name} успешно записан в базу.")

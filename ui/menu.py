@@ -39,6 +39,11 @@ def get_confirm_menu():
     markup.add(KeyboardButton("Верно"), KeyboardButton("Я ошибся"))
     markup.row(KeyboardButton("🚪 Выйти"))
     return markup
+def confirm_transaction():
+    markup = ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
+    markup.add(KeyboardButton("✅ Подтвердить"), KeyboardButton("Я ошибся"))
+    markup.row(KeyboardButton("🚪 Выйти"))
+    return markup
 
 
 def get_cartridge_inline_keyboard():
