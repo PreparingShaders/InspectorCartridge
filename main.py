@@ -1,4 +1,8 @@
-
+# # Этот блок только для рабочего ноута
+# import ssl
+# from ssl_off import unsafe_create_default_context
+# ssl.create_default_context = unsafe_create_default_context
+# # -------------
 
 import asyncio
 from db import save_transaction
@@ -75,6 +79,49 @@ async def main_handler(message: Message):
     if text == "🚪 Выйти":
         reset_state(user_id)
         await bot.send_message(user_id, "Вы вышли из аккаунта. Используйте /start для новой авторизации.")
+        return
+
+    # --- Назад ---
+    if text == "◀️ Назад":
+        step = state["step"]
+
+        if step == "awaiting_action":
+            state["step"] = "awaiting_warehouse"
+            await bot.send_message(user_id, "Выберите склад:", reply_markup=get_warehouse_menu())
+            return
+
+        elif step == "awaiting_warehouse":
+            state["step"] = "awaiting_password"
+            state["warehouse"] = None
+            await bot.send_message(user_id, "Вы вернулись на шаг авторизации. Введите пароль:")
+            return
+
+        elif step == "awaiting_model":
+            state["step"] = "awaiting_action"
+            await send_action_menu(user_id)
+            return
+
+        elif step == "awaiting_barcode":
+            state["step"] = "awaiting_model"
+            await bot.send_message(user_id, "Выберите модель картриджа:", reply_markup=get_cartridge_inline_keyboard())
+            return
+
+        elif step == "awaiting_comment":
+            state["step"] = "awaiting_barcode"
+            await bot.send_message(user_id, "Введите штрих-код заново:", reply_markup=get_barcode_menu())
+            return
+
+        elif step == "confirm_barcode":
+            state["step"] = "awaiting_comment"
+            await bot.send_message(user_id, "Введите комментарий заново:")
+            return
+
+        elif step == "awaiting_logs_period":
+            state["step"] = "awaiting_action"
+            await send_action_menu(user_id)
+            return
+
+        await bot.send_message(user_id, "Неизвестный шаг для возврата назад.")
         return
 
     # --- Шаги ---

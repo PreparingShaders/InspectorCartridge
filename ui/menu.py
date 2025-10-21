@@ -14,7 +14,7 @@ def get_admin_menu():
         KeyboardButton("📥 Приход"),
         KeyboardButton("📊 Складской запас"),
         KeyboardButton("📜 История операций"),
-        KeyboardButton("🚪 Выйти")
+        KeyboardButton("◀️ Назад")
     )
     return keyboard
 
@@ -22,7 +22,7 @@ def get_user_menu():
     keyboard = ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
     keyboard.add(
         KeyboardButton("📤 Расход"),
-        KeyboardButton("🚪 Выйти")
+        KeyboardButton("◀️ Назад")
     )
     return keyboard
 
@@ -32,20 +32,20 @@ def get_barcode_menu():
     """
     markup = ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
     markup.add(KeyboardButton("Нет кода"),
-               KeyboardButton("🚪 Выйти"))
+               KeyboardButton("◀️ Назад"))
     return markup
 
 def get_confirm_menu():
     markup = ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
     markup.add(KeyboardButton("Верно"), KeyboardButton("Я ошибся"))
-    markup.row(KeyboardButton("🚪 Выйти"))
+    markup.row(KeyboardButton("◀️ Назад"))
     return markup
 
 
 def confirm_transaction():
     markup = ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
     markup.add(KeyboardButton("✅ Подтвердить"), KeyboardButton("Я ошибся"))
-    markup.row(KeyboardButton("🚪 Выйти"))
+    markup.row(KeyboardButton("◀️ Назад"))
     return markup
 
 
