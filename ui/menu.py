@@ -13,6 +13,7 @@ def get_admin_menu():
         KeyboardButton("📤 Расход"),
         KeyboardButton("📥 Приход"),
         KeyboardButton("📊 Складской запас"),
+        KeyboardButton("📜 История операций"),
         KeyboardButton("🚪 Выйти")
     )
     return keyboard

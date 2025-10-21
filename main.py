@@ -1,9 +1,3 @@
-#
-# Этот блок только для рабочего ноута
-import ssl
-from ssl_off import unsafe_create_default_context
-ssl.create_default_context = unsafe_create_default_context
-# -------------
 
 
 import asyncio
@@ -19,7 +13,7 @@ from ui.menu import (
     get_barcode_menu,
     get_confirm_menu
 )
-from actions import handle_user_expense, handle_admin_income, handle_admin_stock
+from actions import handle_user_expense, handle_admin_income, handle_admin_stock, handle_admin_logs
 import os
 from db import init_db
 
@@ -119,15 +113,19 @@ async def main_handler(message: Message):
             state["step"] = "awaiting_model"
         elif text == "📊 Складской запас" and state["role"] == "admin":
             await handle_admin_stock(bot, user_id)
+        elif text == "📜 История операций" and state["role"] == "admin":
+            await handle_admin_logs(bot, user_id, state)
         else:
             await bot.send_message(user_id, "Выберите действие через кнопки.")
         return
+
+    elif state["step"] == "awaiting_logs_period":
+        await handle_admin_logs(bot, user_id, state, text)
 
     if state["step"] == "awaiting_barcode":
         # Ввод штрих-кода
         barcode = text if text.lower() not in ["нет кода", "пропустить"] else "отсутствует"
         state["barcode"] = barcode
-        state["step"] = "confirm_barcode"
         state["step"] = "awaiting_comment"  # Новый шаг
         await bot.send_message(user_id, "Введите комментарий (например, имя пользователя, отдел, причина и т.п.):")
         return

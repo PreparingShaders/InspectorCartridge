@@ -1,5 +1,5 @@
 import sqlite3
-from datetime import datetime
+from datetime import datetime, timedelta
 
 DB_NAME = "inventory.db"
 
@@ -61,8 +61,6 @@ def init_db():
         conn.commit()
         print("База инициализирована и заполнена начальными данными.")
 
-
-
 def get_all_cartridge_types():
     with sqlite3.connect(DB_NAME) as conn:
         cursor = conn.cursor()
@@ -86,58 +84,85 @@ def get_stock_grouped_by_warehouse():
         """)
         return cursor.fetchall()
 
-
-def save_transaction(user_state: dict, username: str):
-    """Добавляет операцию (приход или расход) в базу данных."""
+def can_spend_cartridge(warehouse_id, cartridge_type_id, barcode=None):
+    """
+    Проверка, можно ли списать картридж с указанным штрих-кодом.
+    Если barcode=None, ищем свободный 'отсутствует'
+    Возвращает True/False
+    """
     with sqlite3.connect(DB_NAME) as conn:
         cursor = conn.cursor()
-        cursor.execute("PRAGMA foreign_keys = ON;")
 
-        # Извлекаем значения из состояния
-        warehouse_name = user_state.get("warehouse")
-        model_name = user_state.get("model")
-        barcode = user_state.get("barcode")
-        operation = user_state.get("operation")
-        comment = user_state.get("comment")
-        quantity = -1 if operation == "расход" else 1  # приход = +1, расход = -1
+        if barcode and barcode != "отсутствует":
+            # Проверяем наличие конкретного штрих-кода
+            cursor.execute("""
+                SELECT SUM(quantity) FROM transactions
+                WHERE warehouse_id=? AND cartridge_type_id=? AND barcode=?
+            """, (warehouse_id, cartridge_type_id, barcode))
+            qty = cursor.fetchone()[0] or 0
+            return qty > 0
 
-        # Находим warehouse_id
-        cursor.execute("SELECT id FROM warehouses WHERE name = ?", (warehouse_name,))
-        warehouse_row = cursor.fetchone()
-        if not warehouse_row:
-            raise ValueError(f"Склад '{warehouse_name}' не найден.")
-        warehouse_id = warehouse_row[0]
+        else:
+            # Проверяем наличие картриджа без штрих-кода
+            cursor.execute("""
+                SELECT SUM(quantity) FROM transactions
+                WHERE warehouse_id=? AND cartridge_type_id=? AND (barcode IS NULL OR barcode='отсутствует')
+            """, (warehouse_id, cartridge_type_id))
+            qty = cursor.fetchone()[0] or 0
+            return qty > 0
 
-        # Находим cartridge_type_id
-        cursor.execute("SELECT id FROM cartridge_types WHERE model = ?", (model_name,))
-        cartridge_row = cursor.fetchone()
-        if not cartridge_row:
-            raise ValueError(f"Модель картриджа '{model_name}' не найдена.")
-        cartridge_type_id = cartridge_row[0]
+def save_transaction(user_state: dict, username: str):
+    warehouse_name = user_state.get("warehouse")
+    model_name = user_state.get("model")
+    barcode = user_state.get("barcode")
+    operation = user_state.get("operation")
+    comment = user_state.get("comment")
+    quantity = 1 if operation == "приход" else -1
 
-        # Формируем дату
+    with sqlite3.connect(DB_NAME) as conn:
+        cursor = conn.cursor()
+
+        # Получаем ID склада и модели
+        cursor.execute("SELECT id FROM warehouses WHERE name=?", (warehouse_name,))
+        warehouse_id = cursor.fetchone()[0]
+
+        cursor.execute("SELECT id FROM cartridge_types WHERE model=?", (model_name,))
+        cartridge_type_id = cursor.fetchone()[0]
+
+        # Проверка перед списанием
+        if operation == "расход":
+            if not can_spend_cartridge(warehouse_id, cartridge_type_id, barcode):
+                raise ValueError(f"Невозможно списать картридж {model_name} с штрих-кодом {barcode}. Нет доступного экземпляра на складе.")
+
         date_now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-        # Добавляем запись
-        cursor.execute(
-            """
-            INSERT INTO transactions (
-                date, barcode, warehouse_id, cartridge_type_id, quantity, 
-                operation_type, user, comment
-            )
+        cursor.execute("""
+            INSERT INTO transactions 
+                (date, barcode, warehouse_id, cartridge_type_id, quantity, operation_type, user, comment)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                date_now,
-                barcode,
-                warehouse_id,
-                cartridge_type_id,
-                quantity,
-                operation,
-                username,
-                comment,
-            ),
-        )
+        """, (date_now, barcode, warehouse_id, cartridge_type_id, quantity, operation, username, comment))
 
         conn.commit()
-        print(f"✅ {operation.title()} картриджа {model_name} успешно записан в базу.")
+
+def get_transactions(days: int = 90):
+    """Возвращает список операций за последние `days` дней"""
+    period_start = datetime.now() - timedelta(days=days)
+
+    with sqlite3.connect(DB_NAME) as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT 
+                t.date,
+                w.name AS warehouse,
+                ct.model AS cartridge,
+                t.operation_type,
+                t.user,
+                t.comment
+            FROM transactions t
+            JOIN warehouses w ON t.warehouse_id = w.id
+            JOIN cartridge_types ct ON t.cartridge_type_id = ct.id
+            WHERE date(t.date) >= date(?)
+            ORDER BY datetime(t.date) DESC
+            LIMIT 50
+        """, (period_start.strftime("%Y-%m-%d"),))
+        return cursor.fetchall()
