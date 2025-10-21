@@ -1,8 +1,8 @@
-# # Этот блок только для рабочего ноута
-# import ssl
-# from ssl_off import unsafe_create_default_context
-# ssl.create_default_context = unsafe_create_default_context
-# # -------------
+# Этот блок только для рабочего ноута
+import ssl
+from ssl_off import unsafe_create_default_context
+ssl.create_default_context = unsafe_create_default_context
+# -------------
 
 import asyncio
 from db import save_transaction
@@ -54,6 +54,13 @@ def get_state(user_id):
         reset_state(user_id)
     return USER_STATES[user_id]
 
+@bot.message_handler(commands=["reset"])
+async def reset_command(message: Message):
+    user_id = message.from_user.id
+    reset_state(user_id)
+    await bot.send_message(user_id, "Сессия сброшена. Введите /start для авторизации.")
+
+
 # --- Старт и авторизация ---
 @bot.message_handler(commands=["start"])
 async def start(message: Message):
@@ -61,8 +68,10 @@ async def start(message: Message):
     state = get_state(user_id)
 
     if state.get("role"):
-        await bot.send_message(user_id, "Вы уже авторизованы.")
-        await send_action_menu(user_id)
+        state["step"] = "awaiting_warehouse"
+        state["warehouse"] = None  # сбрасываем склад
+        await bot.send_message(user_id, "Вы уже авторизованы. Пожалуйста, выберите склад:",
+                               reply_markup=get_warehouse_menu())
         return
 
     state["step"] = "awaiting_password"
@@ -121,7 +130,7 @@ async def main_handler(message: Message):
             await send_action_menu(user_id)
             return
 
-        await bot.send_message(user_id, "Неизвестный шаг для возврата назад.")
+        await bot.send_message(user_id, "Неизвестный шаг для возврата назад. Нажмите /start или /reset.")
         return
 
     # --- Шаги ---
@@ -146,7 +155,26 @@ async def main_handler(message: Message):
             state["step"] = "awaiting_action"
             await send_action_menu(user_id)
         else:
-            await bot.send_message(user_id, "Выберите склад через кнопки.")
+            await bot.send_message(user_id, """ℹ️ <b>Справка по боту</b>
+
+            <b>1.</b> Отправьте команду <code>/start</code>
+            <b>2.</b> Введите пароль для авторизации
+            <b>3.</b> Выберите склад: 🏬 Невская или 🏬 Новороссийская
+
+            <b>Доступные действия:</b>
+            📥 <b>Приход</b> — добавить картриджи на склад  
+            📤 <b>Расход</b> — списать картриджи с комментарием  
+            📊 <b>Складской запас</b> — посмотреть остатки по моделям  
+            📜 <b>История операций</b> — логи движений картриджей
+
+            <b>Навигация:</b>
+            ◀️ <b>Назад</b> — вернуться на предыдущий шаг  
+            🔄 <b>Сброс</b> Для сброса, если что-то пошло не так. <code>/reset</code>
+            🚪 <b>Выйти</b> — завершить сессию и выйти
+
+            По всем вопросам обращайтесь к @Alexy_Polly.
+            """, parse_mode="HTML")
+
         return
 
     if state["step"] == "awaiting_action":
