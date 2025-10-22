@@ -13,8 +13,6 @@ def parse_date(text: str):
         print(f"[DEBUG] Ошибка разбора даты: {e}")
         return None
 
-
-
 async def handle_admin_income(bot: AsyncTeleBot, user_id: int):
     try:
         keyboard = get_cartridge_inline_keyboard()
@@ -92,17 +90,28 @@ async def handle_admin_stock(bot: AsyncTeleBot, user_id: int):
         await bot.send_message(user_id, "Нет данных о складе.")
         return
 
-    # Группировка и форматирование данных
     message = "📊 Складской запас:\n\n"
     current_warehouse = None
+    totals = {}
 
     for warehouse, model, quantity in stock_data:
+        # Переход к новому складу
         if warehouse != current_warehouse:
             message += f"\n🏢 <b>{warehouse}</b>\n"
             current_warehouse = warehouse
+
         message += f"🖨 {model}: {quantity} шт.\n"
 
+        # Суммируем общее количество по моделям
+        totals[model] = totals.get(model, 0) + quantity
+
+    # Добавляем блок общих остатков
+    message += "\n📦 <b>Общий остаток по всем складам:</b>\n"
+    for model, total_qty in totals.items():
+        message += f"🖨 {model}: {total_qty} шт.\n"
+
     await bot.send_message(user_id, message, parse_mode="HTML")
+
 
 async def handle_user_expense(bot: AsyncTeleBot, user_id: int):
     try:

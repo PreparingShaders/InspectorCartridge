@@ -4,7 +4,8 @@ from db import get_all_cartridge_types  # импорт из твоего db.py
 def get_warehouse_menu():
     markup = ReplyKeyboardMarkup(resize_keyboard=True)
     markup.row(KeyboardButton( "🏬 Невская"), KeyboardButton("🏬 Новороссийская"))
-    markup.row(KeyboardButton("❓ Помощь"), KeyboardButton("🚪 Выйти"))
+    markup.row(KeyboardButton ("❓ Помощь"), KeyboardButton("📊 Складской запас"))
+    markup.row(KeyboardButton("🚪 Выйти"))
     return markup
 
 def get_admin_menu():
@@ -12,7 +13,6 @@ def get_admin_menu():
     keyboard.add(
         KeyboardButton("📤 Расход"),
         KeyboardButton("📥 Приход"),
-        KeyboardButton("📊 Складской запас"),
         KeyboardButton("📜 История операций"),
         KeyboardButton("◀️ Назад")
     )

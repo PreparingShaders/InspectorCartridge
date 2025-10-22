@@ -151,9 +151,15 @@ async def main_handler(message: Message):
         }
 
         if text in warehouses_map:
-            state["warehouse"] = warehouses_map[text]  # сохраняем без эмодзи
+            state["warehouse"] = warehouses_map[text]
             state["step"] = "awaiting_action"
             await send_action_menu(user_id)
+            return
+
+        elif text == "📊 Складской запас":
+            await handle_admin_stock(bot, user_id)
+            return
+
         else:
             await bot.send_message(user_id, """ℹ️ <b>Справка по боту</b>
 
@@ -186,20 +192,16 @@ async def main_handler(message: Message):
             state["operation"] = "расход"
             await bot.send_message(user_id, "Выберите модель картриджа:", reply_markup=get_cartridge_inline_keyboard())
             state["step"] = "awaiting_model"
-        elif text == "📊 Складской запас" and state["role"] == "admin":
-            await handle_admin_stock(bot, user_id)
         elif text == "📜 История операций" and state["role"] == "admin":
             await handle_admin_logs(bot, user_id, state)
+
         else:
             await bot.send_message(user_id, "Выберите действие через кнопки.")
         return
 
-    elif state["step"] in ("awaiting_logs_from", "awaiting_logs_to"):
+    elif state["step"] in ["awaiting_logs_from", "awaiting_logs_to"]:
         await handle_admin_logs(bot, user_id, state, text)
-
-
-    elif state["step"] == "awaiting_logs_period":
-        await handle_admin_logs(bot, user_id, state, text)
+        return
 
     # Ввод штрих-кода
     if state["step"] == "awaiting_barcode":
@@ -213,7 +215,7 @@ async def main_handler(message: Message):
 
         state["barcode"] = barcode
         state["step"] = "awaiting_comment"  # Новый шаг
-        await bot.send_message(user_id, "Введите комментарий (например, имя пользователя, отдел, причина и т.п.):")
+        await bot.send_message(user_id, "💬 Введите комментарий (например, имя пользователя, отдел, причина и т.п.):")
         return
 
     if state["step"] == "awaiting_comment":
