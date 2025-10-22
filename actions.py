@@ -1,9 +1,19 @@
 # actions.py
 
 from telebot.async_telebot import AsyncTeleBot
-from db import get_all_cartridge_types, get_stock_grouped_by_warehouse, get_transactions
+from db import get_all_cartridge_types, get_stock_grouped_by_warehouse, get_transactions_by_period
 from ui.menu import get_cartridge_inline_keyboard
+from datetime import datetime
 # Эти функции пока используют только user_id и bot, потом можно будет расширить
+
+def parse_date(text: str):
+    try:
+        return datetime.strptime(text.strip(), "%d.%m.%Y")
+    except ValueError as e:
+        print(f"[DEBUG] Ошибка разбора даты: {e}")
+        return None
+
+
 
 async def handle_admin_income(bot: AsyncTeleBot, user_id: int):
     try:
@@ -13,44 +23,67 @@ async def handle_admin_income(bot: AsyncTeleBot, user_id: int):
         await bot.send_message(user_id, f"Ошибка при приходе: {e}")
 
 async def handle_admin_logs(bot: AsyncTeleBot, user_id: int, state: dict, text: str = None):
-    """
-    Если text=None — спрашиваем период.
-    Если text — число — показываем операции за указанное количество дней.
-    """
-    if state.get("step") != "awaiting_logs_period":
-        state["step"] = "awaiting_logs_period"
-        await bot.send_message(user_id, "🕒 Укажите период в днях (например, 90):")
+    step = state.get("step")
+
+    if step != "awaiting_logs_from" and step != "awaiting_logs_to":
+        # Первый шаг — запрос даты начала
+        state["step"] = "awaiting_logs_from"
+        await bot.send_message(user_id, "📅 Введите дату начала сбора логов (в формате ДД.ММ.ГГГГ):")
         return
 
-    # Проверяем, что пользователь ввёл число
-    if not text or not text.isdigit():
-        await bot.send_message(user_id, "❌ Введите корректное число (например, 30).")
+    if step == "awaiting_logs_from":
+        date_from = parse_date(text)
+        if not date_from:
+            await bot.send_message(user_id, "❌ Некорректный формат даты. Введите дату в формате ДД.ММ.ГГГГ.")
+            return
+        state["logs_from"] = date_from
+        state["step"] = "awaiting_logs_to"
+        await bot.send_message(user_id, "📅 Теперь введите дату окончания:")
         return
 
-    days = int(text)
-    logs = get_transactions(days)
+    if step == "awaiting_logs_to":
+        date_to = parse_date(text)
+        if not date_to:
+            await bot.send_message(user_id, "❌ Некорректный формат даты. Введите дату в формате ДД.ММ.ГГГГ.")
+            return
 
-    if not logs:
-        await bot.send_message(user_id, f"📭 За последние {days} дней операций не найдено.")
+        date_from = state.get("logs_from")
+        if not date_from:
+            # На всякий случай — сброс состояния
+            state["step"] = "awaiting_action"
+            await bot.send_message(user_id, "⚠️ Что-то пошло не так. Попробуйте заново.")
+            return
+
+        if date_to < date_from:
+            await bot.send_message(user_id, "❌ Дата окончания не может быть раньше даты начала. Попробуйте снова.")
+            return
+
+        # Получаем операции из БД
+        logs = get_transactions_by_period(date_from, date_to)
+        if not logs:
+            await bot.send_message(user_id, f"📭 Операции с {date_from.date()} по {date_to.date()} не найдены.")
+            state["step"] = "awaiting_action"
+            return
+
+        # Формируем сообщение
+        message = f"📜 Операции с {date_from.date()} по {date_to.date()}:\n\n"
+        for date, warehouse, model, barcode, operation, user, comment in logs:
+            message += (
+                f"📅 {date}\n"
+                f"🏬 {warehouse}\n"
+                f"🖨  {model} 🆔 {barcode}\n"
+                f"⚙️ {operation.capitalize()} — {user}\n"
+                f"💬 {comment or '—'}\n\n"
+            )
+
+        if len(message) > 4000:
+            message = message[:4000] + "\n\n(Обрезано — слишком длинный список)"
+
+        await bot.send_message(user_id, message)
         state["step"] = "awaiting_action"
+        state.pop("logs_from", None)
         return
 
-    # Формируем сообщение
-    message = f"📜 История операций за {days} дней:\n\n"
-    for date, warehouse, model, operation, user, comment in logs:
-        message += (
-            f"📅 {date}\n"
-            f"🏬 {warehouse}\n"
-            f"🖨 {model}\n"
-            f"⚙️ {operation.capitalize()} — {user}\n"
-            f"💬 {comment or '—'}\n\n"
-        )
-
-    if len(message) > 4000:
-        message = message[:4000] + "\n\n(Обрезано — слишком длинный список)"
-
-    await bot.send_message(user_id, message)
-    state["step"] = "awaiting_action"
 
 async def handle_admin_stock(bot: AsyncTeleBot, user_id: int):
     stock_data = get_stock_grouped_by_warehouse()
@@ -67,12 +100,11 @@ async def handle_admin_stock(bot: AsyncTeleBot, user_id: int):
         if warehouse != current_warehouse:
             message += f"\n🏢 <b>{warehouse}</b>\n"
             current_warehouse = warehouse
-        message += f"• {model}: {quantity} шт.\n"
+        message += f"🖨 {model}: {quantity} шт.\n"
 
     await bot.send_message(user_id, message, parse_mode="HTML")
 
 async def handle_user_expense(bot: AsyncTeleBot, user_id: int):
-    # Пока что просто пример записи
     try:
         keyboard = get_cartridge_inline_keyboard()
         await bot.send_message(user_id, f"Выберите модель картриджа: ", reply_markup=keyboard)

@@ -194,12 +194,23 @@ async def main_handler(message: Message):
             await bot.send_message(user_id, "Выберите действие через кнопки.")
         return
 
+    elif state["step"] in ("awaiting_logs_from", "awaiting_logs_to"):
+        await handle_admin_logs(bot, user_id, state, text)
+
+
     elif state["step"] == "awaiting_logs_period":
         await handle_admin_logs(bot, user_id, state, text)
 
+    # Ввод штрих-кода
     if state["step"] == "awaiting_barcode":
-        # Ввод штрих-кода
-        barcode = text if text.lower() not in ["нет кода", "пропустить"] else "отсутствует"
+        if text.isdigit() and len(text) == 13:
+            barcode = text
+        elif text.lower() in ["нет кода"]:
+            barcode =  "отсутствует"
+        else:
+            await bot.send_message(user_id,"Ошибка🚨\n🆔Штрих-код должен содержать ровно 13 цифр.\n\nЕсли нет кода нажмите >> 'Нет кода'.")
+            return  # Ждём повторного ввода
+
         state["barcode"] = barcode
         state["step"] = "awaiting_comment"  # Новый шаг
         await bot.send_message(user_id, "Введите комментарий (например, имя пользователя, отдел, причина и т.п.):")
@@ -210,10 +221,12 @@ async def main_handler(message: Message):
         state["step"] = "confirm_barcode"
         await bot.send_message(
             user_id,
-            f"Мы {'принимаем' if state['operation'] == 'приход' else 'списываем'} картридж {state['model']} "
-            f"на склад {state['warehouse']} с серийным номером {state['barcode']}.\n"
-            f"Комментарий: {state['comment']}\n"
-            f"Верно?",
+            f"❗{'Принимаем' if state['operation'] == 'приход' else 'Списываем'}:\n\n" 
+            f"🖨 Картридж: {state['model']}\n\n"
+            f"🏬 Cклад: {state['warehouse']}\n\n" 
+            f"🆔 Штрих-код: {state['barcode']}\n\n"
+            f"💬 Комментарий: {state['comment']}\n\n"
+            f"Верно?⁉️ Если да, то жми кнопку 'Верно'!",
             reply_markup=get_confirm_menu()
         )
         return
@@ -252,7 +265,7 @@ async def handle_model_callback(call: CallbackQuery):
     state["step"] = "awaiting_barcode"
 
     await bot.answer_callback_query(call.id)
-    await bot.send_message(user_id, f"Введите штрих-код для модели {model}.\nЕсли кода нет, нажмите кнопку 'Нет кода':",
+    await bot.send_message(user_id, f"Введите 🆔 штрих-код для модели {model} 🖨 .\n\n❗Если кода нет, нажмите кнопку 'Нет кода':",
                                    reply_markup=get_barcode_menu())
 
 

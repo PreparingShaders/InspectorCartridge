@@ -144,10 +144,7 @@ def save_transaction(user_state: dict, username: str):
 
         conn.commit()
 
-def get_transactions(days: int = 90):
-    """Возвращает список операций за последние `days` дней"""
-    period_start = datetime.now() - timedelta(days=days)
-
+def get_transactions_by_period(date_from: datetime, date_to: datetime):
     with sqlite3.connect(DB_NAME) as conn:
         cursor = conn.cursor()
         cursor.execute("""
@@ -155,14 +152,18 @@ def get_transactions(days: int = 90):
                 t.date,
                 w.name AS warehouse,
                 ct.model AS cartridge,
+                t.barcode,
                 t.operation_type,
                 t.user,
                 t.comment
             FROM transactions t
             JOIN warehouses w ON t.warehouse_id = w.id
             JOIN cartridge_types ct ON t.cartridge_type_id = ct.id
-            WHERE date(t.date) >= date(?)
+            WHERE date(t.date) BETWEEN date(?) AND date(?)
             ORDER BY datetime(t.date) DESC
             LIMIT 50
-        """, (period_start.strftime("%Y-%m-%d"),))
+        """, (
+            date_from.strftime("%Y-%m-%d"),
+            date_to.strftime("%Y-%m-%d")
+        ))
         return cursor.fetchall()
