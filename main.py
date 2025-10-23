@@ -1,10 +1,14 @@
-# Этот блок только для рабочего ноута
-import ssl
-from ssl_off import unsafe_create_default_context
-ssl.create_default_context = unsafe_create_default_context
-# -------------
+# # Этот блок только для рабочего ноута
+# import ssl
+# from ssl_off import unsafe_create_default_context
+# ssl.create_default_context = unsafe_create_default_context
+# # -------------
+import os
+os.environ["DYLD_LIBRARY_PATH"] = "/opt/homebrew/lib:" + os.environ.get("DYLD_LIBRARY_PATH", "")
+
 
 import asyncio
+from handlers.barcode_scan import init_barcode_handler
 from db import save_transaction
 from telebot.async_telebot import AsyncTeleBot
 from telebot.types import Message, CallbackQuery
@@ -54,6 +58,11 @@ def get_state(user_id):
         reset_state(user_id)
     return USER_STATES[user_id]
 
+
+# --- Инициализация обработчика штрих-кодов ---
+init_barcode_handler(bot, get_state)
+
+# --- Команда сброса ---
 @bot.message_handler(commands=["reset"])
 async def reset_command(message: Message):
     user_id = message.from_user.id
