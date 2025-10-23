@@ -31,6 +31,6 @@ def init_barcode_handler(bot, get_state):
         if barcode.isdigit() and len(barcode) == 13:
             state["barcode"] = barcode
             state["step"] = "awaiting_comment"
-            await bot.send_message(user_id, f"✅ Штрих-код распознан: {barcode}\n\n💬 Введите комментарий:")
+            await bot.send_message(user_id, f"✅ Штрих-код распознан:🆔{barcode}\n\n💬 Введите комментарий:")
         else:
             await bot.send_message(user_id, f"⚠️ Распознанный код: {barcode}\nОн должен содержать 13 цифр.")

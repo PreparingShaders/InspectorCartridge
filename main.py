@@ -1,10 +1,10 @@
-# # Этот блок только для рабочего ноута
-# import ssl
-# from ssl_off import unsafe_create_default_context
-# ssl.create_default_context = unsafe_create_default_context
-# # -------------
-import os
-os.environ["DYLD_LIBRARY_PATH"] = "/opt/homebrew/lib:" + os.environ.get("DYLD_LIBRARY_PATH", "")
+# Этот блок только для рабочего ноута
+import ssl
+from ssl_off import unsafe_create_default_context
+ssl.create_default_context = unsafe_create_default_context
+# -------------
+# import os
+# os.environ["DYLD_LIBRARY_PATH"] = "/opt/homebrew/lib:" + os.environ.get("DYLD_LIBRARY_PATH", "")
 
 
 import asyncio
