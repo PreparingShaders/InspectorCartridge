@@ -275,7 +275,7 @@ async def main_handler(message: Message):
             )
             return
 
-        elif text == "🏁 Завершить":
+        elif text == "📋 Меню":
             reset_state_for_next_transaction(user_id)
             await send_action_menu(user_id)
             return

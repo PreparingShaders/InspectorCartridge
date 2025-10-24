@@ -129,6 +129,15 @@ def save_transaction(user_state: dict, username: str):
         cursor.execute("SELECT id FROM cartridge_types WHERE model=?", (model_name,))
         cartridge_type_id = cursor.fetchone()[0]
 
+        # 🔍 Проверяем, есть ли уже такой штрих-код в базе (только если код реально задан)
+        if barcode and barcode != "отсутствует":
+            cursor.execute("SELECT COUNT(*) FROM transactions WHERE barcode = ?", (barcode,))
+            exists = cursor.fetchone()[0]
+
+            # ❌ Если barcode уже есть и это операция "приход" — отклоняем
+            if exists and operation == "приход":
+                raise ValueError(f"Картридж с штрих-кодом {barcode} уже есть в базе данных!")
+
         # Проверка перед списанием
         if operation == "расход":
             if not can_spend_cartridge(warehouse_id, cartridge_type_id, barcode):

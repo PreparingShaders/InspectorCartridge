@@ -46,7 +46,7 @@ def confirm_transaction():
 
 def get_after_operation_menu():
     markup = ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
-    markup.row(KeyboardButton("↩ Повторить"),KeyboardButton("🏁 Завершить"))
+    markup.row(KeyboardButton("↩ Повторить"),KeyboardButton("📋 Меню"))
     return markup
 
 def get_comment_menu():
@@ -55,16 +55,20 @@ def get_comment_menu():
     return markup
 
 
+
 def get_cartridge_inline_keyboard():
     """
     Возвращает инлайн-клавиатуру с типами картриджей из базы.
-    Используется для выбора модели в приходе/расходе.
+    Каждая строка содержит 2 кнопки. Внизу добавлена кнопка 'Назад'.
     """
     types = get_all_cartridge_types()
-    markup = InlineKeyboardMarkup(row_width=3)
+    markup = InlineKeyboardMarkup()
 
-    for model in types:
-        btn = InlineKeyboardButton(text=model, callback_data=f"cartridge:{model}")
-        markup.add(btn)
+    # Группируем модели по 2 для двух колонок
+    for i in range(0, len(types), 2):
+        pair = types[i:i+2]
+        buttons = [InlineKeyboardButton(text=model, callback_data=f"cartridge:{model}") for model in pair]
+        markup.row(*buttons)  # добавляем ряд с 1 или 2 кнопками
 
     return markup
+
