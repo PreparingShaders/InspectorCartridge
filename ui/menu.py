@@ -28,23 +28,29 @@ def get_user_menu():
 
 def get_barcode_menu():
     """
-    Возвращает клавиатуру с кнопкой 'Пропустить' для ввода штрих-кода.
+    Возвращает клавиатуру с кнопкой 'Нет кода' и 'Назад' для ввода штрих-кода.
     """
-    markup = ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
-    markup.add(KeyboardButton("Нет кода"),
-               KeyboardButton("◀️ Назад"))
+    markup = ReplyKeyboardMarkup(resize_keyboard=True)
+    markup.row(KeyboardButton("Нет кода"), KeyboardButton("◀️ Назад"))
     return markup
 
 def get_confirm_menu():
-    markup = ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
-    markup.add(KeyboardButton("Верно"), KeyboardButton("Я ошибся"))
-    markup.row(KeyboardButton("◀️ Назад"))
+    markup = ReplyKeyboardMarkup(resize_keyboard=True)
+    markup.row(KeyboardButton("✅ Верно"), KeyboardButton("◀️ Назад"))
     return markup
 
-
 def confirm_transaction():
+    markup = ReplyKeyboardMarkup(resize_keyboard=True)
+    markup.add(KeyboardButton("✅ Подтвердить"), KeyboardButton("◀️ Назад") )
+    return markup
+
+def get_after_operation_menu():
     markup = ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
-    markup.add(KeyboardButton("✅ Подтвердить"), KeyboardButton("Я ошибся"))
+    markup.row(KeyboardButton("↩ Повторить"),KeyboardButton("🏁 Завершить"))
+    return markup
+
+def get_comment_menu():
+    markup = ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
     markup.row(KeyboardButton("◀️ Назад"))
     return markup
 

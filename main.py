@@ -19,7 +19,9 @@ from ui.menu import (
     get_warehouse_menu,
     get_cartridge_inline_keyboard,
     get_barcode_menu,
-    get_confirm_menu
+    get_confirm_menu,
+    get_after_operation_menu,
+    get_comment_menu
 )
 from actions import handle_user_expense, handle_admin_income, handle_admin_stock, handle_admin_logs
 import os
@@ -224,7 +226,7 @@ async def main_handler(message: Message):
 
         state["barcode"] = barcode
         state["step"] = "awaiting_comment"  # Новый шаг
-        await bot.send_message(user_id, "💬 Введите комментарий (например, имя пользователя, отдел, причина и т.п.):")
+        await bot.send_message(user_id, "💬 Введите комментарий (например, имя пользователя, отдел, желательно имя принтера с наклейки):", reply_markup=get_comment_menu())
         return
 
     if state["step"] == "awaiting_comment":
@@ -237,33 +239,47 @@ async def main_handler(message: Message):
             f"🏬 Cклад: {state['warehouse']}\n\n" 
             f"🆔 Штрих-код: {state['barcode']}\n\n"
             f"💬 Комментарий: {state['comment']}\n\n"
-            f"Верно?⁉️ Если да, то жми кнопку 'Верно'!",
+            f"Верно?⁉️ Если да, то жми кнопку '✅ Верно'!",
             reply_markup=get_confirm_menu()
         )
         return
 
     if state["step"] == "confirm_barcode":
-        if text == "Верно":
+        if text == "✅ Верно":
             username = message.from_user.username or message.from_user.first_name
             try:
                 save_transaction(state, username)
                 await bot.send_message(user_id, "✅ Операция успешно сохранена в базе данных.")
-                reset_state_for_next_transaction(user_id)
-                await send_action_menu(user_id)
+
+                # Переходим к шагу повторения
+                state["step"] = "after_operation"
+                await bot.send_message(user_id, "Что делать дальше?", reply_markup=get_after_operation_menu())
+
             except Exception as e:
                 await bot.send_message(user_id, f"❌ Ошибка при сохранении: {e}")
                 reset_state_for_next_transaction(user_id)
                 await send_action_menu(user_id)
+            return
 
-        elif text == "Я ошибся":
-            state["step"] = "awaiting_barcode"
+    if state["step"] == "after_operation":
+        if text == "↩ Повторить":
+            # Сбрасываем только штрих-код и комментарий
             state["barcode"] = None
+            state["comment"] = None
+            state["step"] = "awaiting_barcode"
+
             await bot.send_message(
                 user_id,
-                "Введите штрих-код заново или выберите картридж:",
+                f"Введите 🆔 штрих-код для модели {state['model']} 🖨:",
                 reply_markup=get_barcode_menu()
             )
-        return
+            return
+
+        elif text == "🏁 Завершить":
+            reset_state_for_next_transaction(user_id)
+            await send_action_menu(user_id)
+            return
+
 
 # --- Inline callback для выбора модели ---
 @bot.callback_query_handler(func=lambda call: call.data.startswith("cartridge:"))
