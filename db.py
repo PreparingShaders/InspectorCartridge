@@ -1,5 +1,7 @@
 import sqlite3
 from datetime import datetime, timedelta
+import re
+
 
 DB_NAME = "inventory.db"
 
@@ -61,12 +63,35 @@ def init_db():
         conn.commit()
         print("База инициализирована и заполнена начальными данными.")
 
+
 def get_all_cartridge_types():
     with sqlite3.connect(DB_NAME) as conn:
         cursor = conn.cursor()
-        cursor.execute("SELECT model FROM cartridge_types ORDER BY model")
-        results = cursor.fetchall()
-        return [row[0] for row in results]
+        cursor.execute("SELECT model FROM cartridge_types")
+        results = [row[0] for row in cursor.fetchall()]
+
+    # Функция для извлечения числа из модели
+    def extract_number(model):
+        match = re.search(r'\d+', model)
+        return int(match.group()) if match else float('inf')
+
+    # Сортируем по числу и по названию модели
+    results.sort(key=lambda x: (extract_number(x), x))
+
+    # Ищем индекс CF226X, чтобы поставить его в начало (если нужно)
+    if "CF226X" in results:
+        idx = results.index("CF226X")
+        results = results[idx:] + results[:idx]
+
+    # Делим на левый и правый столбцы
+    mid = (len(results) + 1) // 2
+    left_col = results[:mid]
+    right_col = results[mid:]
+
+    # Склеиваем сначала левый столбец, потом правый
+    final_results = left_col + right_col
+
+    return final_results
 
 def get_stock_grouped_by_warehouse():
     with sqlite3.connect(DB_NAME) as conn:

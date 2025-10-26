@@ -1,5 +1,7 @@
 from telebot.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardButton, InlineKeyboardMarkup
 from db import get_all_cartridge_types  # импорт из твоего db.py
+import re
+
 
 def get_warehouse_menu():
     markup = ReplyKeyboardMarkup(resize_keyboard=True)
@@ -54,21 +56,28 @@ def get_comment_menu():
     markup.row(KeyboardButton("◀️ Назад"))
     return markup
 
-
-
 def get_cartridge_inline_keyboard():
-    """
-    Возвращает инлайн-клавиатуру с типами картриджей из базы.
-    Каждая строка содержит 2 кнопки. Внизу добавлена кнопка 'Назад'.
-    """
-    types = get_all_cartridge_types()
+    types = get_all_cartridge_types()  # функция, которая возвращает все модели
     markup = InlineKeyboardMarkup()
 
-    # Группируем модели по 2 для двух колонок
-    for i in range(0, len(types), 2):
-        pair = types[i:i+2]
-        buttons = [InlineKeyboardButton(text=model, callback_data=f"cartridge:{model}") for model in pair]
-        markup.row(*buttons)  # добавляем ряд с 1 или 2 кнопками
+    # Функция для извлечения числа из модели
+    def extract_number(model):
+        match = re.search(r'\d+', model)
+        return int(match.group()) if match else float('inf')
+
+    # Сортируем список по числу
+    types.sort(key=lambda x: (extract_number(x), x))
+
+    # Разделяем на левый и правый столбцы
+    mid = (len(types) + 1) // 2
+    left_col = types[:mid]
+    right_col = types[mid:]
+
+    # Формируем ряды кнопок по 2: левый + правый
+    for i in range(mid):
+        buttons = [InlineKeyboardButton(text=left_col[i], callback_data=f"cartridge:{left_col[i]}")]
+        if i < len(right_col):
+            buttons.append(InlineKeyboardButton(text=right_col[i], callback_data=f"cartridge:{right_col[i]}"))
+        markup.row(*buttons)
 
     return markup
-

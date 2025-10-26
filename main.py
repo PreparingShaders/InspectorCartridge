@@ -1,10 +1,13 @@
 # Этот блок только для рабочего ноута
-import ssl
-from ssl_off import unsafe_create_default_context
-ssl.create_default_context = unsafe_create_default_context
-# -------------
-# import os
-# os.environ["DYLD_LIBRARY_PATH"] = "/opt/homebrew/lib:" + os.environ.get("DYLD_LIBRARY_PATH", "")
+# import ssl
+# from ssl_off import unsafe_create_default_context
+# ssl.create_default_context = unsafe_create_default_context
+# # -------------
+# -1001758030666 GROUP_CHAT_ID
+# 435962963 это ID личного чата с ботом
+
+import os
+os.environ["DYLD_LIBRARY_PATH"] = "/opt/homebrew/lib:" + os.environ.get("DYLD_LIBRARY_PATH", "")
 
 
 import asyncio
