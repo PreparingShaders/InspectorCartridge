@@ -1,4 +1,6 @@
 pyTelegramBotAPI==4.29.1
 telebot==0.0.5
 aiohttp==3.13.0
-
+pyzbar==0.1.9
+pillow==11.3.0
+requests==2.32.5
