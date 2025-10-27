@@ -2,9 +2,7 @@ import sqlite3
 from datetime import datetime, timedelta
 import re
 
-
 DB_NAME = "inventory.db"
-
 
 def init_db():
     with sqlite3.connect(DB_NAME) as conn:
@@ -110,31 +108,23 @@ def get_stock_grouped_by_warehouse():
         return cursor.fetchall()
 
 def can_spend_cartridge(warehouse_id, cartridge_type_id, barcode=None):
-    """
-    Проверка, можно ли списать картридж с указанным штрих-кодом.
-    Если barcode=None, ищем свободный 'отсутствует'
-    Возвращает True/False
-    """
     with sqlite3.connect(DB_NAME) as conn:
         cursor = conn.cursor()
-
         if barcode and barcode != "отсутствует":
-            # Проверяем наличие конкретного штрих-кода
             cursor.execute("""
                 SELECT SUM(quantity) FROM transactions
                 WHERE warehouse_id=? AND cartridge_type_id=? AND barcode=?
             """, (warehouse_id, cartridge_type_id, barcode))
-            qty = cursor.fetchone()[0] or 0
-            return qty > 0
-
         else:
-            # Проверяем наличие картриджа без штрих-кода
             cursor.execute("""
                 SELECT SUM(quantity) FROM transactions
-                WHERE warehouse_id=? AND cartridge_type_id=? AND (barcode IS NULL OR barcode='отсутствует')
+                WHERE warehouse_id=? AND cartridge_type_id=?
+                AND (barcode IS NULL OR barcode='отсутствует')
             """, (warehouse_id, cartridge_type_id))
-            qty = cursor.fetchone()[0] or 0
-            return qty > 0
+        stock = cursor.fetchone()[0] or 0
+        return stock > 0
+
+
 
 def save_transaction(user_state: dict, username: str):
     warehouse_name = user_state.get("warehouse")
@@ -154,22 +144,13 @@ def save_transaction(user_state: dict, username: str):
         cursor.execute("SELECT id FROM cartridge_types WHERE model=?", (model_name,))
         cartridge_type_id = cursor.fetchone()[0]
 
-        # 🔍 Проверяем, есть ли уже такой штрих-код в базе (только если код реально задан)
-        if barcode and barcode != "отсутствует":
-            cursor.execute("SELECT COUNT(*) FROM transactions WHERE barcode = ?", (barcode,))
-            exists = cursor.fetchone()[0]
-
-            # ❌ Если barcode уже есть и это операция "приход" — отклоняем
-            if exists and operation == "приход":
-                raise ValueError(f"Картридж с штрих-кодом {barcode} уже есть в базе данных!")
-
         # Проверка перед списанием
-        if operation == "расход":
-            if not can_spend_cartridge(warehouse_id, cartridge_type_id, barcode):
-                raise ValueError(f"Невозможно списать картридж {model_name} с штрих-кодом {barcode}. Нет доступного экземпляра на складе.")
+        if operation == "расход" and not can_spend_cartridge(warehouse_id, cartridge_type_id, barcode):
+            raise ValueError(f"Невозможно списать картридж {model_name} с barcode {barcode}. Нет доступного экземпляра.")
 
         date_now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
+        # Добавляем транзакцию
         cursor.execute("""
             INSERT INTO transactions 
                 (date, barcode, warehouse_id, cartridge_type_id, quantity, operation_type, user, comment)
@@ -177,6 +158,7 @@ def save_transaction(user_state: dict, username: str):
         """, (date_now, barcode, warehouse_id, cartridge_type_id, quantity, operation, username, comment))
 
         conn.commit()
+
 
 def get_transactions_by_period(date_from: datetime, date_to: datetime):
     with sqlite3.connect(DB_NAME) as conn:

@@ -1,7 +1,7 @@
 # Этот блок только для рабочего ноута
-# import ssl
-# from ssl_off import unsafe_create_default_context
-# ssl.create_default_context = unsafe_create_default_context
+import ssl
+from ssl_off import unsafe_create_default_context
+ssl.create_default_context = unsafe_create_default_context
 # # -------------
 # -1001758030666 GROUP_CHAT_ID
 # 2 это ID личного чата с ботом
