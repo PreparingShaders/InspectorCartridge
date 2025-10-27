@@ -110,21 +110,23 @@ def get_stock_grouped_by_warehouse():
 def can_spend_cartridge(warehouse_id, cartridge_type_id, barcode=None):
     with sqlite3.connect(DB_NAME) as conn:
         cursor = conn.cursor()
+
+        query = """
+            SELECT SUM(quantity)
+            FROM transactions
+            WHERE warehouse_id=? AND cartridge_type_id=?
+        """
+        params = [warehouse_id, cartridge_type_id]
+
         if barcode and barcode != "отсутствует":
-            cursor.execute("""
-                SELECT SUM(quantity) FROM transactions
-                WHERE warehouse_id=? AND cartridge_type_id=? AND barcode=?
-            """, (warehouse_id, cartridge_type_id, barcode))
+            query += " AND barcode=?"
+            params.append(barcode)
         else:
-            cursor.execute("""
-                SELECT SUM(quantity) FROM transactions
-                WHERE warehouse_id=? AND cartridge_type_id=?
-                AND (barcode IS NULL OR barcode='отсутствует')
-            """, (warehouse_id, cartridge_type_id))
+            query += " AND (barcode IS NULL OR barcode='отсутствует')"
+
+        cursor.execute(query, params)
         stock = cursor.fetchone()[0] or 0
         return stock > 0
-
-
 
 def save_transaction(user_state: dict, username: str):
     warehouse_name = user_state.get("warehouse")
