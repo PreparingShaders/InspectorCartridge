@@ -4,7 +4,7 @@
 # ssl.create_default_context = unsafe_create_default_context
 # # -------------
 # -1001758030666 GROUP_CHAT_ID
-# 435962963 это ID личного чата с ботом
+# 2 это ID личного чата с ботом
 
 import os
 os.environ["DYLD_LIBRARY_PATH"] = "/opt/homebrew/lib:" + os.environ.get("DYLD_LIBRARY_PATH", "")
@@ -30,6 +30,8 @@ from actions import handle_user_expense, handle_admin_income, handle_admin_stock
 import os
 from db import init_db
 
+from notifier import send_catalog_message
+
 # Инициализация базы
 init_db()
 
@@ -37,6 +39,7 @@ bot = AsyncTeleBot(os.environ["TELEGRAM_TESTBOT"])
 
 # --- Глобальные состояния ---
 USER_STATES = {}  # user_id -> словарь состояния
+
 
 # --- Утилита для сброса состояния ---
 def reset_state(user_id):
@@ -310,6 +313,13 @@ async def send_action_menu(user_id):
 # --- Точка входа ---
 async def main():
     print("Бот запущен")
+
+    # # --- Тестовое сообщение в каталог ---
+    # try:
+    #     send_catalog_message("👋 Привет! Я запустился в каталог для теста.")
+    # except Exception as e:
+    #     print(f"[ERROR] Не удалось отправить тестовое сообщение: {e}")
+
     await bot.polling()
 
 if __name__ == "__main__":
