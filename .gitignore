@@ -205,3 +205,7 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+#Игнорируем базу данных и сертификаты
+inspector_SQLite.db
+ssl_off.py

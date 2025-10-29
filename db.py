@@ -2,7 +2,7 @@ import sqlite3
 from datetime import datetime, timedelta
 import re
 
-DB_NAME = "inventory.db"
+DB_NAME = "inspector_SQLite.db"
 
 def init_db():
     with sqlite3.connect(DB_NAME) as conn:
