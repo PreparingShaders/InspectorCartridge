@@ -30,7 +30,7 @@ from actions import handle_user_expense, handle_admin_income, handle_admin_stock
 import os
 from db import init_db
 
-from notifier import send_catalog_message
+from notifier import notify_admin_stock
 
 # Инициализация базы
 init_db()
@@ -314,14 +314,12 @@ async def send_action_menu(user_id):
 async def main():
     print("Бот запущен")
 
-    # --- Тестовое сообщение в каталог ---
     try:
-        send_catalog_message("👋 Пока вы работаете, я буду следить за количеством картриджей на складах. У меня все ходы записаны, муха не проскочит.")
+        await notify_admin_stock()  # обязательно await
     except Exception as e:
         print(f"[ERROR] Не удалось отправить тестовое сообщение: {e}")
 
     await bot.polling()
-
 
 if __name__ == "__main__":
     asyncio.run(main())

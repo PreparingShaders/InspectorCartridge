@@ -83,11 +83,11 @@ async def handle_admin_logs(bot: AsyncTeleBot, user_id: int, state: dict, text: 
         return
 
 
-async def handle_admin_stock(bot: AsyncTeleBot, user_id: int):
+async def handle_admin_stock(bot: AsyncTeleBot, user_id: int, thread_id: int = None):
     stock_data = get_stock_grouped_by_warehouse()
 
     if not stock_data:
-        await bot.send_message(user_id, "Нет данных о складе.")
+        await bot.send_message(user_id, "Нет данных о складе.", message_thread_id=thread_id)
         return
 
     message = "📊 Складской запас:\n\n"
@@ -95,22 +95,22 @@ async def handle_admin_stock(bot: AsyncTeleBot, user_id: int):
     totals = {}
 
     for warehouse, model, quantity in stock_data:
-        # Переход к новому складу
         if warehouse != current_warehouse:
             message += f"\n🏢 <b>{warehouse}</b>\n"
             current_warehouse = warehouse
 
         message += f"🖨 {model}: {quantity} шт.\n"
-
-        # Суммируем общее количество по моделям
         totals[model] = totals.get(model, 0) + quantity
 
-    # Добавляем блок общих остатков
     message += "\n📦 <b>Общий остаток по всем складам:</b>\n"
     for model, total_qty in totals.items():
         message += f"🖨 {model}: {total_qty} шт.\n"
 
-    await bot.send_message(user_id, message, parse_mode="HTML")
+    # Добавляем thread_id, если он указан
+    if thread_id:
+        await bot.send_message(user_id, message, parse_mode="HTML", message_thread_id=thread_id)
+    else:
+        await bot.send_message(user_id, message, parse_mode="HTML")
 
 
 async def handle_user_expense(bot: AsyncTeleBot, user_id: int):
