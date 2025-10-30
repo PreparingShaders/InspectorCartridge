@@ -1,8 +1,8 @@
 # Этот блок только для рабочего ноута
-import ssl
-from ssl_off import unsafe_create_default_context
-ssl.create_default_context = unsafe_create_default_context
-# # -------------
+# import ssl
+# from ssl_off import unsafe_create_default_context
+# ssl.create_default_context = unsafe_create_default_context
+# -------------
 # -1001758030666 GROUP_CHAT_ID
 # 2 это ID личного чата с ботом
 
@@ -26,15 +26,16 @@ from ui.menu import (
     get_after_operation_menu,
     get_comment_menu
 )
-from actions import handle_user_expense, handle_admin_income, handle_admin_stock, handle_admin_logs
+from actions import handle_user_expense, handle_admin_income, handle_admin_stock, handle_admin_logs, notify_low_stock
 import os
 from db import init_db
-
 from notifier import notify_admin_stock
 
 # Инициализация базы
 init_db()
 
+GROUP_CHAT_ID = int(os.getenv("GROUP_CHAT_ID"))
+THREAD_ID = int(os.getenv("THREAD_ID"))
 bot = AsyncTeleBot(os.environ["TELEGRAM_BOT"])
 
 # --- Глобальные состояния ---
@@ -257,6 +258,12 @@ async def main_handler(message: Message):
                 save_transaction(state, username)
                 await bot.send_message(user_id, "✅ Операция успешно сохранена в базе данных.")
 
+                # --- Проверка остатков после расхода ---
+                if state["operation"] == "расход":
+                    warehouse_id = ...  # получи ID склада по state['warehouse']
+                    cartridge_type_id = ...  # получи ID типа картриджа по state['model']
+                    await notify_low_stock(bot, GROUP_CHAT_ID, warehouse_id, cartridge_type_id)
+
                 # Переходим к шагу повторения
                 state["step"] = "after_operation"
                 await bot.send_message(user_id, "Что делать дальше?", reply_markup=get_after_operation_menu())
@@ -313,12 +320,10 @@ async def send_action_menu(user_id):
 # --- Точка входа ---
 async def main():
     print("Бот запущен")
-
     try:
-        await notify_admin_stock()  # обязательно await
+        await notify_admin_stock(bot, GROUP_CHAT_ID, THREAD_ID)
     except Exception as e:
         print(f"[ERROR] Не удалось отправить тестовое сообщение: {e}")
-
     await bot.polling()
 
 if __name__ == "__main__":

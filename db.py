@@ -2,6 +2,7 @@ import sqlite3
 from datetime import datetime, timedelta
 import re
 
+
 DB_NAME = "inspector_SQLite.db"
 
 def init_db():
@@ -161,6 +162,8 @@ def save_transaction(user_state: dict, username: str):
 
         conn.commit()
 
+    # Возвращаем ID склада и тип картриджа для уведомлений
+    return warehouse_id, cartridge_type_id
 
 def get_transactions_by_period(date_from: datetime, date_to: datetime):
     with sqlite3.connect(DB_NAME) as conn:

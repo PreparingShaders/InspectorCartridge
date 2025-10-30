@@ -4,6 +4,8 @@ from telebot.async_telebot import AsyncTeleBot
 from db import get_all_cartridge_types, get_stock_grouped_by_warehouse, get_transactions_by_period
 from ui.menu import get_cartridge_inline_keyboard
 from datetime import datetime
+import aiosqlite
+
 # Эти функции пока используют только user_id и bot, потом можно будет расширить
 
 def parse_date(text: str):
@@ -112,6 +114,20 @@ async def handle_admin_stock(bot: AsyncTeleBot, user_id: int, thread_id: int = N
     else:
         await bot.send_message(user_id, message, parse_mode="HTML")
 
+
+async def notify_low_stock(bot: AsyncTeleBot, group_id: int, warehouse_id: int, cartridge_type_id: int):
+    """
+    Проверяет остаток картриджей на складе и отправляет сообщение в группу, если < 3.
+    """
+    async with aiosqlite.connect("inspector_SQLite.db") as db:
+        async with db.execute("""
+            SELECT SUM(quantity) FROM transactions
+            WHERE warehouse_id=? AND cartridge_type_id=?
+        """, (warehouse_id, cartridge_type_id)) as cursor:
+            row = await cursor.fetchone()
+            total = row[0] or 0
+            if total < 3:
+                await bot.send_message(group_id, f"⚠️ Остаток картриджей на складе критический: {total} шт.")
 
 async def handle_user_expense(bot: AsyncTeleBot, user_id: int):
     try:
