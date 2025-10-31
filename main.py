@@ -29,7 +29,7 @@ from ui.menu import (
 from actions import handle_user_expense, handle_admin_income, handle_admin_stock, handle_admin_logs, notify_low_stock
 import os
 from db import init_db
-from notifier import notify_admin_stock
+import notifier
 
 # Инициализация базы
 init_db()
@@ -255,14 +255,12 @@ async def main_handler(message: Message):
         if text == "✅ Верно":
             username = message.from_user.username or message.from_user.first_name
             try:
-                save_transaction(state, username)
+                warehouse_id, cartridge_type_id = save_transaction(state, username)
                 await bot.send_message(user_id, "✅ Операция успешно сохранена в базе данных.")
 
                 # --- Проверка остатков после расхода ---
                 if state["operation"] == "расход":
-                    warehouse_id = ...  # получи ID склада по state['warehouse']
-                    cartridge_type_id = ...  # получи ID типа картриджа по state['model']
-                    await notify_low_stock(bot, GROUP_CHAT_ID, warehouse_id, cartridge_type_id)
+                    await notify_low_stock(bot, GROUP_CHAT_ID, warehouse_id, cartridge_type_id, THREAD_ID)
 
                 # Переходим к шагу повторения
                 state["step"] = "after_operation"
@@ -319,11 +317,8 @@ async def send_action_menu(user_id):
 
 # --- Точка входа ---
 async def main():
-    print("Бот запущен")
-    try:
-        await notify_admin_stock(bot, GROUP_CHAT_ID, THREAD_ID)
-    except Exception as e:
-        print(f"[ERROR] Не удалось отправить тестовое сообщение: {e}")
+    print("Бот запущен и следит за временем...")
+    notifier.start_notifier(bot, GROUP_CHAT_ID, THREAD_ID)
     await bot.polling()
 
 if __name__ == "__main__":

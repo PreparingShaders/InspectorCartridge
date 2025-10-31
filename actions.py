@@ -5,6 +5,7 @@ from db import get_all_cartridge_types, get_stock_grouped_by_warehouse, get_tran
 from ui.menu import get_cartridge_inline_keyboard
 from datetime import datetime
 import aiosqlite
+import random
 
 # Эти функции пока используют только user_id и bot, потом можно будет расширить
 
@@ -115,19 +116,74 @@ async def handle_admin_stock(bot: AsyncTeleBot, user_id: int, thread_id: int = N
         await bot.send_message(user_id, message, parse_mode="HTML")
 
 
-async def notify_low_stock(bot: AsyncTeleBot, group_id: int, warehouse_id: int, cartridge_type_id: int):
+async def notify_low_stock(bot: AsyncTeleBot, group_id: int, warehouse_id: int, cartridge_type_id: int, thread_id: int = None):
     """
-    Проверяет остаток картриджей на складе и отправляет сообщение в группу, если < 3.
+    Проверяет остаток картриджей на складе и отправляет сообщение в группу (или ветку), если остаток < 3.
+    Сообщение выбирается случайным образом из набора шаблонов.
     """
     async with aiosqlite.connect("inspector_SQLite.db") as db:
+        # Получаем остаток
         async with db.execute("""
-            SELECT SUM(quantity) FROM transactions
+            SELECT SUM(quantity) 
+            FROM transactions
             WHERE warehouse_id=? AND cartridge_type_id=?
         """, (warehouse_id, cartridge_type_id)) as cursor:
             row = await cursor.fetchone()
             total = row[0] or 0
-            if total < 3:
-                await bot.send_message(group_id, f"⚠️ Остаток картриджей на складе критический: {total} шт.")
+
+        # Получаем название склада
+        async with db.execute("SELECT name FROM warehouses WHERE id=?", (warehouse_id,)) as cursor:
+            warehouse_row = await cursor.fetchone()
+            warehouse_name = warehouse_row[0] if warehouse_row else f"ID {warehouse_id}"
+
+        # Получаем модель картриджа
+        async with db.execute("SELECT model FROM cartridge_types WHERE id=?", (cartridge_type_id,)) as cursor:
+            model_row = await cursor.fetchone()
+            model_name = model_row[0] if model_row else f"ID {cartridge_type_id}"
+
+    # --- Проверяем критический уровень ---
+    if total < 3:
+        # Набор сообщений для выбора
+        messages = [
+            (
+                "👮‍♂️ Inspector на связи!\n"
+                f"⚠️ Я тут не сплю и заметил подозрительное движение на складе *{warehouse_name}*.\n"
+                f"Картридж *{model_name}* тает на глазах — осталось всего {total} шт! 😨\n"
+                f"Советую взять ситуацию под карандаш ✏️ и восполнить запас, пока не поздно!"
+            ),
+            (
+                "🕵️‍♂️ Inspector докладывает:\n"
+                f"На складе *{warehouse_name}* ситуация тревожная — картриджей *{model_name}* осталось всего {total} шт.\n"
+                f"Пока ты читаешь это сообщение, может стать ещё меньше… 😏\n"
+                f"Рекомендую пополнить запасы. Inspector бдит!"
+            ),
+            (
+                "🚨 Inspector выходит из режима сна!\n"
+                f"На складе *{warehouse_name}* почти закончились картриджи *{model_name}* — всего {total} шт!\n"
+                f"Я не паникую, но если завтра кто-то не распечатает отчёт — я предупреждал 😎\n"
+                f"Доставай карандаш ✏️ и добавляй заказ, пока не поздно!"
+            ),
+            (
+                "🌑 Inspector на связи. Ночь, кофе остыл, а картриджи на складе *{warehouse_name}* заканчиваются...\n"
+                f"Осталось всего {total} шт. модели *{model_name}*.\n"
+                f"Запах тревоги витает в воздухе. Я бы взял карандаш и записал это в журнал… пока не стало поздно. ☕️"
+            ),
+            (
+                "🤖 Inspector сообщает: уровень чернил тревожно низкий!\n"
+                f"Картриджей *{model_name}* на складе *{warehouse_name}* осталось {total} шт.\n"
+                f"Мой алгоритм подсказывает — самое время пополнить запас, пока принтер не заплакал! 💧"
+            )
+        ]
+
+        # Выбираем случайное сообщение
+        message = random.choice(messages)
+
+        await bot.send_message(
+            group_id,
+            message,
+            message_thread_id=thread_id,
+            parse_mode="Markdown"
+        )
 
 async def handle_user_expense(bot: AsyncTeleBot, user_id: int):
     try:
