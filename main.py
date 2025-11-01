@@ -1,7 +1,7 @@
 # Этот блок только для рабочего ноута
-# import ssl
-# from ssl_off import unsafe_create_default_context
-# ssl.create_default_context = unsafe_create_default_context
+import ssl
+from ssl_off import unsafe_create_default_context
+ssl.create_default_context = unsafe_create_default_context
 # -------------
 # -1001758030666 GROUP_CHAT_ID
 # 2 это ID личного чата с ботом
@@ -138,6 +138,11 @@ async def main_handler(message: Message):
             await bot.send_message(user_id, "Введите штрих-код заново:", reply_markup=get_barcode_menu())
             return
 
+        elif step == "awaiting_quantity":
+            state["step"] = "awaiting_comment"
+            await bot.send_message(user_id, "Введите комментарий заново:")
+            return
+
         elif step == "confirm_barcode":
             state["step"] = "awaiting_comment"
             await bot.send_message(user_id, "Введите комментарий заново:")
@@ -238,14 +243,29 @@ async def main_handler(message: Message):
 
     if state["step"] == "awaiting_comment":
         state["comment"] = text
-        state["step"] = "confirm_barcode"
+        state["step"] = "awaiting_quantity"
         await bot.send_message(
             user_id,
-            f"❗{'Принимаем' if state['operation'] == 'приход' else 'Списываем'}:\n\n" 
-            f"🖨 Картридж: {state['model']}\n\n"
-            f"🏬 Cклад: {state['warehouse']}\n\n" 
-            f"🆔 Штрих-код: {state['barcode']}\n\n"
-            f"💬 Комментарий: {state['comment']}\n\n"
+            "📦 Введите количество картриджей с данным штрих-кодом (например: 5)\n Если код другой операцию произвести через Расход или Приход"
+        )
+        return
+
+    if state["step"] == "awaiting_quantity":
+        if not text.isdigit() or int(text) <= 0 or int(text) > 20:
+            await bot.send_message(user_id, "❌ Введите положительное число в диапозоне от 0 до 20 (например: 3).")
+            return
+
+        state["quantity"] = int(text)
+        state["step"] = "confirm_barcode"
+
+        await bot.send_message(
+            user_id,
+            f"❗{'Принимаем' if state['operation'] == 'приход' else 'Списываем'}:\n\n"
+            f"🖨 Картридж: {state['model']}\n"
+            f"🏬 Склад: {state['warehouse']}\n"
+            f"🆔 Штрих-код: {state['barcode']}\n"
+            f"💬 Комментарий: {state['comment']}\n"
+            f"📦 Количество: {state['quantity']}\n\n"
             f"Верно?⁉️ Если да, то жми кнопку '✅ Верно'!",
             reply_markup=get_confirm_menu()
         )
