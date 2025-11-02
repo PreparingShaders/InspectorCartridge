@@ -1,7 +1,5 @@
 # Этот блок только для рабочего ноута
-import ssl
-from ssl_off import unsafe_create_default_context
-ssl.create_default_context = unsafe_create_default_context
+# 9
 # -------------
 # -1001758030666 GROUP_CHAT_ID
 # 2 это ID личного чата с ботом
@@ -12,7 +10,7 @@ os.environ["DYLD_LIBRARY_PATH"] = "/opt/homebrew/lib:" + os.environ.get("DYLD_LI
 
 import asyncio
 from handlers.barcode_scan import init_barcode_handler
-from db import save_transaction
+from db import save_transaction, export_database_to_excel, DB_NAME
 from telebot.async_telebot import AsyncTeleBot
 from telebot.types import Message, CallbackQuery
 from auth.auth import check_password
@@ -24,13 +22,15 @@ from ui.menu import (
     get_barcode_menu,
     get_confirm_menu,
     get_after_operation_menu,
-    get_comment_menu
+    get_comment_menu,
+    get_logs_keyboard,
+
 )
 from actions import handle_user_expense, handle_admin_income, handle_admin_stock, handle_admin_logs, notify_low_stock
 import os
 from db import init_db
 import notifier
-
+from datetime import datetime, timedelta
 # Инициализация базы
 init_db()
 
@@ -78,7 +78,19 @@ async def reset_command(message: Message):
     reset_state(user_id)
     await bot.send_message(user_id, "Сессия сброшена. Введите /start для авторизации.")
 
-
+# --- обработчик ---
+@bot.callback_query_handler(func=lambda call: call.data == "export_excel")
+async def export_excel_callback(call):
+    excel_path = None
+    try:
+        excel_path = export_database_to_excel(DB_NAME)  # твоя база
+        with open(excel_path, "rb") as f:
+            await bot.send_document(call.message.chat.id, f, caption="📊 Полная выгрузка базы данных")
+    except Exception as e:
+        await bot.send_message(call.message.chat.id, f"⚠ Ошибка при выгрузке: {e}")
+    finally:
+        if excel_path and os.path.exists(excel_path):
+            os.remove(excel_path)
 # --- Старт и авторизация ---
 @bot.message_handler(commands=["start"])
 async def start(message: Message):
@@ -216,7 +228,9 @@ async def main_handler(message: Message):
             await bot.send_message(user_id, "Выберите модель картриджа:", reply_markup=get_cartridge_inline_keyboard())
             state["step"] = "awaiting_model"
         elif text == "📜 История операций" and state["role"] == "admin":
-            await handle_admin_logs(bot, user_id, state)
+            kb = get_logs_keyboard()
+            await bot.send_message(message.chat.id, "📊 Выберите период для просмотра логов:", reply_markup=kb)
+            return
 
         else:
             await bot.send_message(user_id, "Выберите действие через кнопки.")
@@ -325,6 +339,46 @@ async def handle_model_callback(call: CallbackQuery):
     await bot.answer_callback_query(call.id)
     await bot.send_message(user_id, f"Введите 🆔 штрих-код для модели {model} 🖨 .\n\n❗Если кода нет, нажмите кнопку 'Нет кода':",
                                    reply_markup=get_barcode_menu())
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith("logs_"))
+async def handle_logs_callback(call):
+    user_id = call.from_user.id
+    state = USER_STATES.get(user_id, {})
+    action = call.data
+
+    now = datetime.now()
+
+    if action == "logs_today":
+        date_from = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        date_to = now
+    elif action == "logs_yesterday":
+        date_from = (now - timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+        date_to = (now - timedelta(days=1)).replace(hour=23, minute=59, second=59)
+    elif action == "logs_week":
+        date_from = now - timedelta(days=7)
+        date_to = now
+    elif action == "logs_month":
+        date_from = now - timedelta(days=30)
+        date_to = now
+    elif action == "logs_3month":
+        date_from = now - timedelta(days=90)
+        date_to = now
+    elif action == "logs_6month":
+        date_from = now - timedelta(days=180)
+        date_to = now
+    elif action == "logs_12month":
+        date_from = now - timedelta(days=365)
+        date_to = now
+    elif action == "logs_manual":
+        await handle_admin_logs(bot, user_id, state)
+        return
+    else:
+        await bot.answer_callback_query(call.id, "❌ Неизвестная команда")
+        return
+
+    await handle_admin_logs(bot, user_id, state, date_from=date_from, date_to=date_to)
+    await bot.answer_callback_query(call.id)
+
 
 
 # --- Функция для показа меню действий ---

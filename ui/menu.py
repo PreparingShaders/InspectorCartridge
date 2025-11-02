@@ -81,3 +81,49 @@ def get_cartridge_inline_keyboard():
         markup.row(*buttons)
 
     return markup
+
+def get_logs_keyboard():
+    kb = InlineKeyboardMarkup(row_width=2)
+    kb.add(
+        InlineKeyboardButton("🕐 Сегодня", callback_data="logs_today"),
+        InlineKeyboardButton("📅 Вчера", callback_data="logs_yesterday"),
+        InlineKeyboardButton("📆 7 дней", callback_data="logs_week"),
+        InlineKeyboardButton("🗓 30 дней", callback_data="logs_month"),
+        InlineKeyboardButton("🕰 3 месяца", callback_data="logs_3month"),
+        InlineKeyboardButton("🕰 6 месяца", callback_data="logs_6month"),
+        InlineKeyboardButton("🕰 12 месяцев", callback_data="logs_12month"),
+        InlineKeyboardButton("🧾 Выбрать вручную", callback_data="logs_manual"),
+        InlineKeyboardButton("📊 Выгрузить Excel", callback_data="export_excel")  # <-- новая кнопка
+
+    )
+    return kb
+
+def get_logs_pagination_markup(page: int, total_pages: int, date_from_ts: float, date_to_ts: float):
+    """
+    Возвращает InlineKeyboardMarkup для навигации по страницам логов.
+    callback_data формата: logs_page:{page}|{from_ts}|{to_ts}
+    где from_ts и to_ts — UNIX timestamp (float or int).
+    """
+    kb = InlineKeyboardMarkup(row_width=3)
+    buttons = []
+
+    # Кнопка назад
+    if page > 0:
+        cb = f"logs_page:{page-1}|{int(date_from_ts)}|{int(date_to_ts)}"
+        buttons.append(InlineKeyboardButton("⬅️ Назад", callback_data=cb))
+
+    # Статус (неактивная кнопка — можно не добавлять, но оставим для UX)
+    buttons.append(InlineKeyboardButton(f"{page+1}/{total_pages}", callback_data="logs_page_info"))
+
+    # Кнопка вперёд
+    if page < total_pages - 1:
+        cb = f"logs_page:{page+1}|{int(date_from_ts)}|{int(date_to_ts)}"
+        buttons.append(InlineKeyboardButton("➡️ Вперёд", callback_data=cb))
+
+    # Добавляем ряд навигации (если только одна кнопка — она будет в центре)
+    kb.row(*buttons)
+
+    # Кнопка возврата в меню (всегда)
+    kb.add(InlineKeyboardButton("📋 Меню", callback_data="back_to_menu"))
+
+    return kb

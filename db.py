@@ -1,9 +1,53 @@
 import sqlite3
 from datetime import datetime, timedelta
 import re
+import pandas as pd
+import os
 
 
 DB_NAME = "inspector_SQLite.db"
+
+def export_database_to_excel(db_path: str = DB_NAME) -> str:
+    """
+    Экспортирует только таблицу transactions в Excel,
+    с объединением (JOIN) по складам и типам картриджей,
+    чтобы вывод был читаемым.
+    """
+    excel_filename = f"transactions_export_{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.xlsx"
+
+    conn = None
+    try:
+        conn = sqlite3.connect(db_path)
+
+        query = """
+            SELECT 
+                t.id AS ID,
+                t.date AS Дата,
+                w.name AS Склад,
+                ct.model AS Модель_картриджа,
+                t.barcode AS Штрихкод,
+                t.quantity AS Количество,
+                t.operation_type AS Тип_операции,
+                t.user AS Пользователь,
+                t.comment AS Комментарий
+            FROM transactions t
+            LEFT JOIN warehouses w ON t.warehouse_id = w.id
+            LEFT JOIN cartridge_types ct ON t.cartridge_type_id = ct.id
+            ORDER BY datetime(t.date) DESC;
+        """
+
+        df = pd.read_sql_query(query, conn)
+
+        # Выгружаем только эту объединённую таблицу
+        with pd.ExcelWriter(excel_filename, engine="openpyxl") as writer:
+            df.to_excel(writer, sheet_name="Транзакции", index=False)
+
+        return excel_filename
+
+    finally:
+        if conn:
+            conn.close()
+
 
 def init_db():
     with sqlite3.connect(DB_NAME) as conn:
@@ -147,18 +191,28 @@ def save_transaction(user_state: dict, username: str):
         cursor.execute("SELECT id FROM cartridge_types WHERE model=?", (model_name,))
         cartridge_type_id = cursor.fetchone()[0]
 
-        # Проверка перед списанием — достаточно, чтобы было хотя бы нужное количество
+        # Проверка перед расходом
         if operation == "расход":
-            cursor.execute("""
-                SELECT SUM(quantity)
-                FROM transactions
-                WHERE warehouse_id=? AND cartridge_type_id=?
-            """, (warehouse_id, cartridge_type_id))
+            if barcode and barcode != "отсутствует":
+                # Проверяем остаток именно этого картриджа
+                cursor.execute("""
+                    SELECT SUM(quantity)
+                    FROM transactions
+                    WHERE warehouse_id=? AND cartridge_type_id=? AND barcode=?
+                """, (warehouse_id, cartridge_type_id, barcode))
+            else:
+                # Для "отсутствует" проверяем общий запас
+                cursor.execute("""
+                    SELECT SUM(quantity)
+                    FROM transactions
+                    WHERE warehouse_id=? AND cartridge_type_id=? AND (barcode IS NULL OR barcode='отсутствует')
+                """, (warehouse_id, cartridge_type_id))
+
             stock = cursor.fetchone()[0] or 0
             if stock < quantity_total:
                 raise ValueError(
-                    f"Недостаточно картриджей {model_name} на складе {warehouse_name}. "
-                    f"Доступно: {stock}, требуется: {quantity_total}."
+                    f"Недостаточно картриджей {model_name} (штрихкод {barcode or 'отсутствует'})\n "
+                    f"На складе {warehouse_name} с таким 🆔 Доступно: {stock}.\n А ты хочешь: {quantity_total} с таким 🆔."
                 )
 
         # Текущая дата
@@ -175,8 +229,11 @@ def save_transaction(user_state: dict, username: str):
 
         conn.commit()
 
+
     # Возвращаем ID склада и тип картриджа для уведомлений
     return warehouse_id, cartridge_type_id
+
+
 
 
 def get_transactions_by_period(date_from: datetime, date_to: datetime):

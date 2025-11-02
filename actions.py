@@ -23,11 +23,59 @@ async def handle_admin_income(bot: AsyncTeleBot, user_id: int):
     except Exception as e:
         await bot.send_message(user_id, f"Ошибка при приходе: {e}")
 
-async def handle_admin_logs(bot: AsyncTeleBot, user_id: int, state: dict, text: str = None):
+async def handle_admin_logs(bot: AsyncTeleBot, user_id: int, state: dict, text: str = None,
+                            date_from=None, date_to=None):
+    """
+    Универсальная функция: если date_from/date_to заданы — сразу показывает логи.
+    Если нет — запрашивает их у пользователя.
+    """
+
+    # Если даты переданы — просто сразу показываем логи
+    if date_from and date_to:
+        logs = get_transactions_by_period(date_from, date_to)
+
+        if not logs:
+            await bot.send_message(user_id, f"📭 Операции с {date_from.date()} по {date_to.date()} не найдены.")
+            state["step"] = "awaiting_action"
+            return
+
+        header = f"📜 Операции с {date_from.date()} по {date_to.date()}:\n\n"
+        message = header
+
+        for date, warehouse, model, barcode, operation, user, comment in logs:
+            # только дата (формат ДД.ММ.ГГГГ)
+            if isinstance(date, str):
+                date_str = date.split()[0]
+            else:
+                date_str = date.strftime("%d.%m.%Y")
+
+            line = (
+                f"📅 {date_str}\n"
+                f"🏬 {warehouse}\n"
+                f"🖨 {model} (🆔{barcode})\n"
+                f"⚙️ {operation.capitalize()}\n"
+                f"👤 {user}\n"
+                f"💬 {comment or '—'}\n"
+                f"━━━━━━━━━━━━━━━\n\n"
+            )
+
+            # Разделяем сообщение, если слишком длинное
+            if len(message) + len(line) > 4000:
+                await bot.send_message(user_id, message)
+                message = header + line
+            else:
+                message += line
+
+        if message.strip():
+            await bot.send_message(user_id, message)
+
+        state["step"] = "awaiting_action"
+        return
+
+    # --- Если даты не переданы — ручной режим ---
     step = state.get("step")
 
-    if step != "awaiting_logs_from" and step != "awaiting_logs_to":
-        # Первый шаг — запрос даты начала
+    if step not in ("awaiting_logs_from", "awaiting_logs_to"):
         state["step"] = "awaiting_logs_from"
         await bot.send_message(user_id, "📅 Введите дату начала сбора логов (в формате ДД.ММ.ГГГГ):")
         return
@@ -50,7 +98,6 @@ async def handle_admin_logs(bot: AsyncTeleBot, user_id: int, state: dict, text: 
 
         date_from = state.get("logs_from")
         if not date_from:
-            # На всякий случай — сброс состояния
             state["step"] = "awaiting_action"
             await bot.send_message(user_id, "⚠️ Что-то пошло не так. Попробуйте заново.")
             return
@@ -59,31 +106,8 @@ async def handle_admin_logs(bot: AsyncTeleBot, user_id: int, state: dict, text: 
             await bot.send_message(user_id, "❌ Дата окончания не может быть раньше даты начала. Попробуйте снова.")
             return
 
-        # Получаем операции из БД
-        logs = get_transactions_by_period(date_from, date_to)
-        if not logs:
-            await bot.send_message(user_id, f"📭 Операции с {date_from.date()} по {date_to.date()} не найдены.")
-            state["step"] = "awaiting_action"
-            return
-
-        # Формируем сообщение
-        message = f"📜 Операции с {date_from.date()} по {date_to.date()}:\n\n"
-        for date, warehouse, model, barcode, operation, user, comment in logs:
-            message += (
-                f"📅 {date}\n"
-                f"🏬 {warehouse}\n"
-                f"🖨  {model} 🆔 {barcode}\n"
-                f"⚙️ {operation.capitalize()} — {user}\n"
-                f"💬 {comment or '—'}\n\n"
-            )
-
-        if len(message) > 4000:
-            message = message[:4000] + "\n\n(Обрезано — слишком длинный список)"
-
-        await bot.send_message(user_id, message)
-        state["step"] = "awaiting_action"
-        state.pop("logs_from", None)
-        return
+        # рекурсивный вызов — теперь с готовыми датами
+        await handle_admin_logs(bot, user_id, state, date_from=date_from, date_to=date_to)
 
 
 async def handle_admin_stock(bot: AsyncTeleBot, user_id: int, thread_id: int = None):
@@ -142,14 +166,14 @@ async def notify_low_stock(bot: AsyncTeleBot, group_id: int, warehouse_id: int, 
             model_name = model_row[0] if model_row else f"ID {cartridge_type_id}"
 
     # --- Проверяем критический уровень ---
-    if total < 3:
+    if total <= 5:
         # Набор сообщений для выбора
         messages = [
             (
                 "👮‍♂️ Inspector на связи!\n"
-                f"⚠️ Я тут не сплю и заметил подозрительное движение на складе *{warehouse_name}*.\n"
+                f"⚠️ Я тут не дремлю и заметил подозрительное движение на складе *{warehouse_name}*.\n"
                 f"Картридж *{model_name}* тает на глазах — осталось всего {total} шт! 😨\n"
-                f"Советую взять ситуацию под карандаш ✏️ и восполнить запас, пока не поздно!"
+                f"Советую взять ситуацию на карандаш ✏️ и восполнить запас, пока не поздно!"
             ),
             (
                 "🕵️‍♂️ Inspector докладывает:\n"
