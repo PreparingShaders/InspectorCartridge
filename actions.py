@@ -2,7 +2,7 @@
 
 from telebot.async_telebot import AsyncTeleBot
 from db import get_all_cartridge_types, get_stock_grouped_by_warehouse, get_transactions_by_period
-from ui.menu import get_cartridge_inline_keyboard
+from ui.menu import get_cartridge_inline_keyboard, get_logs_pagination_markup
 from datetime import datetime
 import aiosqlite
 import random
@@ -23,14 +23,14 @@ async def handle_admin_income(bot: AsyncTeleBot, user_id: int):
     except Exception as e:
         await bot.send_message(user_id, f"Ошибка при приходе: {e}")
 
-async def handle_admin_logs(bot: AsyncTeleBot, user_id: int, state: dict, text: str = None,
-                            date_from=None, date_to=None):
-    """
-    Универсальная функция: если date_from/date_to заданы — сразу показывает логи.
-    Если нет — запрашивает их у пользователя.
-    """
+def chunk_logs(logs, size=3):
+    """Разбивает список логов на страницы по size записей."""
+    for i in range(0, len(logs), size):
+        yield logs[i:i + size]
 
-    # Если даты переданы — просто сразу показываем логи
+
+async def handle_admin_logs(bot: AsyncTeleBot, user_id: int, state: dict, text: str = None,
+                            date_from=None, date_to=None, page: int = 0):
     if date_from and date_to:
         logs = get_transactions_by_period(date_from, date_to)
 
@@ -39,17 +39,31 @@ async def handle_admin_logs(bot: AsyncTeleBot, user_id: int, state: dict, text: 
             state["step"] = "awaiting_action"
             return
 
+        # --- Разбиваем на страницы ---
+        page_size = 3
+        pages = list(chunk_logs(logs, page_size))
+        total_pages = len(pages)
+
+        # ❗ УДАЛЯЕМ строку page = 0
+        # page = 0  # <-- убери эту строку
+
+        # --- Проверяем, не вышли ли за пределы ---
+        if page < 0:
+            page = 0
+        elif page >= total_pages:
+            page = total_pages - 1
+
+        # --- Формируем текст для выбранной страницы ---
         header = f"📜 Операции с {date_from.date()} по {date_to.date()}:\n\n"
         message = header
 
-        for date, warehouse, model, barcode, operation, user, comment in logs:
-            # только дата (формат ДД.ММ.ГГГГ)
+        for date, warehouse, model, barcode, operation, user, comment in pages[page]:
             if isinstance(date, str):
                 date_str = date.split()[0]
             else:
                 date_str = date.strftime("%d.%m.%Y")
 
-            line = (
+            message += (
                 f"📅 {date_str}\n"
                 f"🏬 {warehouse}\n"
                 f"🖨 {model} (🆔{barcode})\n"
@@ -59,20 +73,37 @@ async def handle_admin_logs(bot: AsyncTeleBot, user_id: int, state: dict, text: 
                 f"━━━━━━━━━━━━━━━\n\n"
             )
 
-            # Разделяем сообщение, если слишком длинное
-            if len(message) + len(line) > 4000:
-                await bot.send_message(user_id, message)
-                message = header + line
-            else:
-                message += line
+        # --- Добавляем кнопки пагинации ---
+        markup = get_logs_pagination_markup(
+            page=page,
+            total_pages=total_pages,
+            date_from_ts=date_from.timestamp(),
+            date_to_ts=date_to.timestamp()
+        )
 
-        if message.strip():
-            await bot.send_message(user_id, message)
+        # 🔧 Если это первая страница — отправляем новое сообщение
+        # 🔧 Если переключаем страницу — редактируем старое
+        if "last_logs_msg_id" in state:
+            try:
+                await bot.edit_message_text(
+                    message,
+                    chat_id=user_id,
+                    message_id=state["last_logs_msg_id"],
+                    reply_markup=markup
+                )
+            except Exception:
+                # если редактирование не удалось (например, сообщение удалено) — отправляем новое
+                msg = await bot.send_message(user_id, message, reply_markup=markup)
+                state["last_logs_msg_id"] = msg.message_id
+        else:
+            msg = await bot.send_message(user_id, message, reply_markup=markup)
+            state["last_logs_msg_id"] = msg.message_id
 
         state["step"] = "awaiting_action"
         return
 
-    # --- Если даты не переданы — ручной режим ---
+
+    # --- остальное без изменений ---
     step = state.get("step")
 
     if step not in ("awaiting_logs_from", "awaiting_logs_to"):
@@ -106,7 +137,6 @@ async def handle_admin_logs(bot: AsyncTeleBot, user_id: int, state: dict, text: 
             await bot.send_message(user_id, "❌ Дата окончания не может быть раньше даты начала. Попробуйте снова.")
             return
 
-        # рекурсивный вызов — теперь с готовыми датами
         await handle_admin_logs(bot, user_id, state, date_from=date_from, date_to=date_to)
 
 
@@ -188,7 +218,7 @@ async def notify_low_stock(bot: AsyncTeleBot, group_id: int, warehouse_id: int, 
                 f"Доставай карандаш ✏️ и добавляй заказ, пока не поздно!"
             ),
             (
-                "🌑 Inspector на связи. Ночь, кофе остыл, а картриджи на складе *{warehouse_name}* заканчиваются...\n"
+                f"🌑 Inspector на связи. Ночь, кофе остыл, а картриджи на складе *{warehouse_name}* заканчиваются...\n"
                 f"Осталось всего {total} шт. модели *{model_name}*.\n"
                 f"Запах тревоги витает в воздухе. Я бы взял карандаш и записал это в журнал… пока не стало поздно. ☕️"
             ),

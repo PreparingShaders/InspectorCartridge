@@ -212,7 +212,8 @@ def save_transaction(user_state: dict, username: str):
             if stock < quantity_total:
                 raise ValueError(
                     f"Недостаточно картриджей {model_name} (штрихкод {barcode or 'отсутствует'})\n "
-                    f"На складе {warehouse_name} с таким 🆔 Доступно: {stock}.\n А ты хочешь: {quantity_total} с таким 🆔."
+                    f"На складе {warehouse_name} с таким 🆔 Доступно: {stock}.\n А ты пытаешься списать с таким 🆔: {quantity_total} шт.\n"
+                    f"Так не получится, укажи правильный 🆔 или смени склад."
                 )
 
         # Текущая дата

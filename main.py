@@ -23,7 +23,7 @@ from ui.menu import (
     get_confirm_menu,
     get_after_operation_menu,
     get_comment_menu,
-    get_logs_keyboard,
+    get_logs_keyboard
 
 )
 from actions import handle_user_expense, handle_admin_income, handle_admin_stock, handle_admin_logs, notify_low_stock
@@ -91,6 +91,39 @@ async def export_excel_callback(call):
     finally:
         if excel_path and os.path.exists(excel_path):
             os.remove(excel_path)
+
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith("logs_page:"))
+async def handle_logs_page_callback(call: CallbackQuery):
+    """
+    Обработчик кнопок пагинации логов.
+    Формат callback_data: logs_page:{page}:{from_ts}:{to_ts}
+    """
+    from actions import handle_admin_logs  # чтобы избежать циклического импорта
+
+    user_id = call.from_user.id
+    state = USER_STATES.get(user_id, {})
+
+    try:
+        # Разбираем данные: logs_page:page:from_ts:to_ts
+        parts = call.data.split(":")
+        if len(parts) != 4:
+            raise ValueError(f"Неверный формат callback_data: {call.data}")
+
+        _, page_str, from_ts_str, to_ts_str = parts
+        page = int(page_str)
+        date_from = datetime.fromtimestamp(int(from_ts_str))
+        date_to = datetime.fromtimestamp(int(to_ts_str))
+
+        await handle_admin_logs(bot, user_id, state, date_from=date_from, date_to=date_to, page=page)
+        await bot.answer_callback_query(call.id)
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        await bot.answer_callback_query(call.id, f"⚠ Ошибка при переключении страницы: {e}")
+
+
 # --- Старт и авторизация ---
 @bot.message_handler(commands=["start"])
 async def start(message: Message):
@@ -378,7 +411,6 @@ async def handle_logs_callback(call):
 
     await handle_admin_logs(bot, user_id, state, date_from=date_from, date_to=date_to)
     await bot.answer_callback_query(call.id)
-
 
 
 # --- Функция для показа меню действий ---

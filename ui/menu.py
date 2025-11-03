@@ -100,30 +100,26 @@ def get_logs_keyboard():
 
 def get_logs_pagination_markup(page: int, total_pages: int, date_from_ts: float, date_to_ts: float):
     """
-    Возвращает InlineKeyboardMarkup для навигации по страницам логов.
-    callback_data формата: logs_page:{page}|{from_ts}|{to_ts}
-    где from_ts и to_ts — UNIX timestamp (float or int).
+    Создаёт клавиатуру для пагинации логов.
+    callback_data имеет формат: logs_page:{page}:{from_ts}:{to_ts}
+    (без '|' — двоеточие безопаснее и проще для split)
     """
     kb = InlineKeyboardMarkup(row_width=3)
     buttons = []
 
     # Кнопка назад
     if page > 0:
-        cb = f"logs_page:{page-1}|{int(date_from_ts)}|{int(date_to_ts)}"
+        cb = f"logs_page:{page-1}:{int(date_from_ts)}:{int(date_to_ts)}"
         buttons.append(InlineKeyboardButton("⬅️ Назад", callback_data=cb))
 
-    # Статус (неактивная кнопка — можно не добавлять, но оставим для UX)
-    buttons.append(InlineKeyboardButton(f"{page+1}/{total_pages}", callback_data="logs_page_info"))
+    # Индикатор страниц
+    buttons.append(InlineKeyboardButton(f"{page+1}/{total_pages}", callback_data="noop"))
 
     # Кнопка вперёд
     if page < total_pages - 1:
-        cb = f"logs_page:{page+1}|{int(date_from_ts)}|{int(date_to_ts)}"
+        cb = f"logs_page:{page+1}:{int(date_from_ts)}:{int(date_to_ts)}"
         buttons.append(InlineKeyboardButton("➡️ Вперёд", callback_data=cb))
 
-    # Добавляем ряд навигации (если только одна кнопка — она будет в центре)
     kb.row(*buttons)
-
-    # Кнопка возврата в меню (всегда)
-    kb.add(InlineKeyboardButton("📋 Меню", callback_data="back_to_menu"))
 
     return kb
