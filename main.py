@@ -373,7 +373,6 @@ async def handle_model_callback(call: CallbackQuery):
     await bot.send_message(user_id, f"Введите 🆔 штрих-код для модели {model} 🖨 .\n\n❗Если кода нет, нажмите кнопку 'Нет кода':",
                                    reply_markup=get_barcode_menu())
 
-git
 @bot.callback_query_handler(func=lambda call: call.data.startswith("logs_"))
 async def handle_logs_callback(call):
     user_id = call.from_user.id
