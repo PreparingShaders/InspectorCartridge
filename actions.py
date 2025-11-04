@@ -31,6 +31,8 @@ def chunk_logs(logs, size=3):
 
 async def handle_admin_logs(bot: AsyncTeleBot, user_id: int, state: dict, text: str = None,
                             date_from=None, date_to=None, page: int = 0):
+
+    # --- Если даты заданы — показываем логи ---
     if date_from and date_to:
         logs = get_transactions_by_period(date_from, date_to)
 
@@ -44,9 +46,6 @@ async def handle_admin_logs(bot: AsyncTeleBot, user_id: int, state: dict, text: 
         pages = list(chunk_logs(logs, page_size))
         total_pages = len(pages)
 
-        # ❗ УДАЛЯЕМ строку page = 0
-        # page = 0  # <-- убери эту строку
-
         # --- Проверяем, не вышли ли за пределы ---
         if page < 0:
             page = 0
@@ -58,11 +57,7 @@ async def handle_admin_logs(bot: AsyncTeleBot, user_id: int, state: dict, text: 
         message = header
 
         for date, warehouse, model, barcode, operation, user, comment in pages[page]:
-            if isinstance(date, str):
-                date_str = date.split()[0]
-            else:
-                date_str = date.strftime("%d.%m.%Y")
-
+            date_str = date.strftime("%d.%m.%Y") if not isinstance(date, str) else date.split()[0]
             message += (
                 f"📅 {date_str}\n"
                 f"🏬 {warehouse}\n"
@@ -81,29 +76,21 @@ async def handle_admin_logs(bot: AsyncTeleBot, user_id: int, state: dict, text: 
             date_to_ts=date_to.timestamp()
         )
 
-        # 🔧 Если это первая страница — отправляем новое сообщение
-        # 🔧 Если переключаем страницу — редактируем старое
+        # --- Удаляем предыдущее сообщение (если было) ---
         if "last_logs_msg_id" in state:
             try:
-                await bot.edit_message_text(
-                    message,
-                    chat_id=user_id,
-                    message_id=state["last_logs_msg_id"],
-                    reply_markup=markup
-                )
+                await bot.delete_message(user_id, state["last_logs_msg_id"])
             except Exception:
-                # если редактирование не удалось (например, сообщение удалено) — отправляем новое
-                msg = await bot.send_message(user_id, message, reply_markup=markup)
-                state["last_logs_msg_id"] = msg.message_id
-        else:
-            msg = await bot.send_message(user_id, message, reply_markup=markup)
-            state["last_logs_msg_id"] = msg.message_id
+                pass  # если сообщение уже удалено — игнорируем
+
+        # --- Отправляем новое сообщение ---
+        msg = await bot.send_message(user_id, message, reply_markup=markup)
+        state["last_logs_msg_id"] = msg.message_id
 
         state["step"] = "awaiting_action"
         return
 
-
-    # --- остальное без изменений ---
+    # --- Если даты ещё не заданы — обрабатываем ввод пользователя ---
     step = state.get("step")
 
     if step not in ("awaiting_logs_from", "awaiting_logs_to"):
@@ -137,7 +124,9 @@ async def handle_admin_logs(bot: AsyncTeleBot, user_id: int, state: dict, text: 
             await bot.send_message(user_id, "❌ Дата окончания не может быть раньше даты начала. Попробуйте снова.")
             return
 
+        # --- Показываем логи ---
         await handle_admin_logs(bot, user_id, state, date_from=date_from, date_to=date_to)
+
 
 
 async def handle_admin_stock(bot: AsyncTeleBot, user_id: int, thread_id: int = None):
